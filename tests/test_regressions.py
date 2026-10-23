@@ -308,12 +308,12 @@ class TestIntrinsics(SnippetTest):
   def test_unlifted_op_does_not_end_the_il(self):
     f = self.analyse('''
 f:
-  { r0 = add(r1, r2):sat }
+  { r0 = cl0(r1) }
   { r0 = add(r0, #3) }
   { jumpr r31 }
 ''')['f']
     self.assertEqual(hexasm.hlil(f), '''
-return A2_addsat(arg2, arg3) + 3''')
+return S2_cl0(arg2) + 3''')
 
   def test_pair_output_is_eight_bytes(self):
     f = self.analyse('''

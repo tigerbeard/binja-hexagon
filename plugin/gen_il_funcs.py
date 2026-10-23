@@ -1007,7 +1007,9 @@ class SemanticsTreeTransformer(Transformer):
       return copy.copy(op)
     if op.type == 'REG_OLD':
       if op.startswith('P'):
+        # Predicates hold unsigned 8-bit values.
         op = IlRegister(1, op)
+        op.signed = False
       elif is_pair_operand(op):
         # Pair
         op = IlRegister(8, op)
@@ -1016,6 +1018,7 @@ class SemanticsTreeTransformer(Transformer):
     elif op.type == 'REG_NEW':
       if op.startswith('P'):
         op = IlRegister(1, op)
+        op.signed = False
       elif is_pair_operand(op):
         # Pair
         op = IlRegister(8, op)
@@ -1515,6 +1518,55 @@ class SemanticsTreeTransformer(Transformer):
       return val
     return IlZeroExtend(8, val)
 
+  def extend_low_bits(self, args, signed):
+    # fZXTN and fSXTN: the low N bits of VAL, zero- or sign-extended to M
+    # bits, as QEMU's extract64 and sextract64.
+    assert (len(args) == 3 and args[1].type == 'INTCON')
+    n, m_bytes = args[0], int(args[1]) // 8
+    val = self.lift_operand(args[2])
+    if getattr(n, 'type', None) == 'INTCON' and int(n) in (8, 16, 32, 64):
+      # A whole byte, half or word: an extension, which reads better.
+      n_bytes = int(n) // 8
+      if val.size > n_bytes:
+        val = IlLowPart(n_bytes, val)
+      val = widen(val, n_bytes)
+      if n_bytes < m_bytes:
+        if signed:
+          return IlSignExtend(m_bytes, val)
+        return IlZeroExtend(m_bytes, val)
+      val = copy.copy(val)
+      val.signed = signed
+      return val
+    # Any other width: masks M bits wide, so 64-bit values take N up to 63.
+    n = self.lift_operand(n)
+    one = IlConst(m_bytes, 1)
+    val, mask = promote(
+        val, IlSub(m_bytes, IlShiftLeft(m_bytes, one, n), copy.copy(one)))
+    value = IlAnd(val.size, val, mask)
+    value.signed = False
+    if not signed:
+      return value
+    sign = IlShiftLeft(m_bytes, copy.copy(one),
+                       IlSub(n.size, n, IlConst(n.size, 1)))
+    value, sign = promote(value, sign)
+    value = IlSub(value.size, IlXor(value.size, value, sign), copy.copy(sign))
+    # Signed at M bits.
+    if value.size > m_bytes:
+      value = IlLowPart(m_bytes, value)
+    value = widen(value, m_bytes)
+    value.signed = True
+    return value
+
+  def macro_expr_fZXTN(self, args):
+    # macros.h:
+    # #define fZXTN(N, M, VAL) (((N) != 0) ? extract64((VAL), 0, (N)) : 0LL)
+    return self.extend_low_bits(args, signed=False)
+
+  def macro_expr_fSXTN(self, args):
+    # macros.h:
+    # #define fSXTN(N, M, VAL) (((N) != 0) ? sextract64((VAL), 0, (N)) : 0LL)
+    return self.extend_low_bits(args, signed=True)
+
   def macro_expr_fCONST64(self, args):
     # A 64-bit literal (fCONSTLL).
     assert (len(args) == 1 and args[0].type == 'INTCON')
@@ -1828,6 +1880,9 @@ class SemanticsTreeTransformer(Transformer):
   def expr_binop(self, op1, binop, op2):
     assert (binop.type in BINOP_TERMINALS)
     op1, op2 = list(map(self.lift_operand, [op1, op2]))
+    if binop.value not in ('<<', '>>'):
+      # A shift has its left operand's type; other operators convert.
+      op1, op2 = promote(op1, op2)
 
     if (binop.value == '+'):
       return IlAdd(op1.size, op1, op2)
@@ -1863,7 +1918,7 @@ class SemanticsTreeTransformer(Transformer):
   @v_args(inline=True)
   def expr_relop(self, op1, relop, op2):
     assert (relop.type in ('EQOP', 'RELOP'))
-    op1, op2 = list(map(self.lift_operand, [op1, op2]))
+    op1, op2 = promote(*map(self.lift_operand, [op1, op2]), compare=True)
 
     if (relop.value == '=='):
       return IlCompareEqual(op1.size, op1, op2)
@@ -1912,6 +1967,49 @@ class SemanticsTreeTransformer(Transformer):
   @v_args(inline=False)
   def unexpected(self, args):
     raise ValueError('Unexpected grammar rule in insn semantics')
+
+
+def widen(expr, size):
+  """|expr| extended to |size| bytes as its type says."""
+  if expr.size >= size:
+    return expr
+  if isinstance(expr, IlConst):
+    # Immediates are C++ ints, and literals print as their value.
+    widened = copy.copy(expr)
+    widened.size = size
+    return widened
+  if expr.signed:
+    return IlSignExtend(size, expr)
+  return IlZeroExtend(size, expr)
+
+
+def literal_fits(expr, size, signed):
+  """Whether |expr| is a literal whose value fits |size| bytes."""
+  if not isinstance(expr, IlConst):
+    return False
+  try:
+    value = int(expr.val, 0)
+  except ValueError:
+    return False  # An immediate operand.
+  bits = 8 * size
+  if signed:
+    return -(1 << (bits - 1)) <= value < (1 << (bits - 1))
+  return 0 <= value < (1 << bits)
+
+
+def promote(op1, op2, compare=False):
+  """C's usual arithmetic conversions, for size: the narrower operand is
+  extended to the wider one's size. A comparison with a literal that fits the
+  other operand's type compares at that type instead (P == 0xff)."""
+  if compare:
+    for narrow, literal in ((op1, op2), (op2, op1)):
+      if literal.size > narrow.size and literal_fits(literal, narrow.size,
+                                                     narrow.signed):
+        literal = copy.copy(literal)
+        literal.size = narrow.size
+        return (narrow, literal) if narrow is op1 else (literal, narrow)
+  size = max(op1.size, op2.size)
+  return widen(op1, size), widen(op2, size)
 
 
 def fit_to_size(size, expr):
@@ -2150,19 +2248,6 @@ def preprocess_semantics(tag):
   cpreprocessor.define('fCONSTLL(A) fCONST64(A)')
   cpreprocessor.define('fPAUSE(IMM)')
 
-  # zero/sign extend: the low N bits of VAL, as QEMU's extract64 and
-  # sextract64. Masks are M bits wide, so 64-bit values take N up to 63.
-  cpreprocessor.define('fXTN_ONE32 1')
-  cpreprocessor.define('fXTN_ONE64 fCAST8u(1)')
-  cpreprocessor.define(
-      'fZXTN(N, M, VAL) ((VAL) & ((fXTN_ONE##M<<(N))-1))')
-  # The sign-extended value is signed at its width M (32 or 64); without the
-  # cast it took the zero-extended mask's unsigned type.
-  cpreprocessor.define('fSXTN_CAST32(A) fCAST4s(A)')
-  cpreprocessor.define('fSXTN_CAST64(A) fCAST8s(A)')
-  cpreprocessor.define('fSXTN(N, M, VAL) fSXTN_CAST##M('
-                       '((fZXTN(N,M,VAL) ^ (fXTN_ONE##M<<((N)-1))) - '
-                       '(fXTN_ONE##M<<((N)-1))))')
 
   # Special branch macros.
   cpreprocessor.define('fCALL(A) { fBRANCH(A, COF_TYPE_CALL); }')
@@ -2222,6 +2307,43 @@ def preprocess_semantics(tag):
   cpreprocessor.define('fMPY32SS(A, B) (fSE32_64(A) * fSE32_64(B))')
   cpreprocessor.define('fMPY32UU(A, B) (fZE32_64(A) * fZE32_64(B))')
   cpreprocessor.define('fMPY32SU(A, B) (fSE32_64(A) * fZE32_64(B))')
+  # 16-bit and 32x16-bit multiplies, as in QEMU's macros.h.
+  cpreprocessor.define('fSE16_32(A) fSXTN(16, 32, A)')
+  cpreprocessor.define('fZE16_32(A) fZXTN(16, 32, A)')
+  cpreprocessor.define(
+      'fMPY16SS(A, B) fSE32_64(fSE16_32(A) * fSE16_32(B))')
+  cpreprocessor.define(
+      'fMPY16UU(A, B) fZE32_64(fZE16_32(A) * fZE16_32(B))')
+  cpreprocessor.define(
+      'fMPY16SU(A, B) fSE32_64(fSE16_32(A) * fZE16_32(B))')
+  cpreprocessor.define('fMPY16US(A, B) fMPY16SU(B, A)')
+  cpreprocessor.define('fSCALE(N, A) (fCAST8s(A) << (N))')
+  cpreprocessor.define('fPASS(A) A')
+  cpreprocessor.define('fROUND(A) (A + 0x8000)')
+
+  # Saturation, as QEMU's macros.h. QEMU also sets USR.OVF when a value
+  # saturates; that is not lifted.
+  cpreprocessor.define(
+      'fSATVALN(N, VAL) (((VAL) < 0) ? (-(fCONST64(1) << ((N) - 1))) : '
+      '((fCONST64(1) << ((N) - 1)) - 1))')
+  cpreprocessor.define(
+      'fSATUVALN(N, VAL) (((VAL) < 0) ? 0 : ((fCONST64(1) << (N)) - 1))')
+  cpreprocessor.define(
+      'fSATN(N, VAL) ((fSXTN(N, 64, VAL) == (VAL)) ? (VAL) : '
+      'fSATVALN(N, VAL))')
+  cpreprocessor.define(
+      'fSATUN(N, VAL) ((fZXTN(N, 64, VAL) == (VAL)) ? (VAL) : '
+      'fSATUVALN(N, VAL))')
+  cpreprocessor.define('fSAT(A) fSATN(32, A)')
+  cpreprocessor.define('fSATW(A) fSATN(32, fCAST8s(A))')
+  cpreprocessor.define('fSATH(VAL) fSATN(16, VAL)')
+  cpreprocessor.define('fSATUH(VAL) fSATUN(16, VAL)')
+  cpreprocessor.define('fSATB(VAL) fSATN(8, VAL)')
+  cpreprocessor.define('fSATUB(VAL) fSATUN(8, VAL)')
+  cpreprocessor.define(
+      'fMPY3216SS(A, B) (fSE32_64(A) * fSXTN(16, 64, B))')
+  cpreprocessor.define(
+      'fMPY3216SU(A, B) (fSE32_64(A) * fZXTN(16, 64, B))')
 
   # Replace macro identifiers with call expressions.
   cpreprocessor.define('fLSBNEW0 fLSBNEW(0)')

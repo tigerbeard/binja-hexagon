@@ -42,7 +42,8 @@ enum TempSubspace {
   kNumTempSubspaces = 3,
 };
 
-constexpr int kFixedTempBase = kNumTempSubspaces * NUM_HEX_REGS;
+constexpr int kFixedTempBase =
+    static_cast<int>(kNumTempSubspaces) * static_cast<int>(NUM_HEX_REGS);
 
 // Effective address, and the generated lifters' scratch values.
 #define EA_REG LLIL_TEMP(kFixedTempBase + 0)

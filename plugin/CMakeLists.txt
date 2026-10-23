@@ -15,12 +15,21 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
-# Generate insn text funcs.
+# Generated sources are formatted with clang-format when it is installed.
+# (A failing generator must still fail the build, so this is not a `|| true`.)
+find_program(CLANG_FORMAT clang-format)
 set(INSN_TEXT_FUNCS_CC  ${CMAKE_CURRENT_BINARY_DIR}/insn_text_funcs_generated.cc)
+set(IL_FUNCS_CC   ${CMAKE_CURRENT_BINARY_DIR}/il_funcs_generated.cc)
+if(CLANG_FORMAT)
+  set(FORMAT_INSN_TEXT_FUNCS COMMAND ${CLANG_FORMAT} -i ${INSN_TEXT_FUNCS_CC})
+  set(FORMAT_IL_FUNCS COMMAND ${CLANG_FORMAT} -i ${IL_FUNCS_CC})
+endif()
+
+# Generate insn text funcs.
 add_custom_command(
   OUTPUT ${INSN_TEXT_FUNCS_CC}
   COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_SOURCE_DIR}/third_party/qemu-hexagon ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/gen_insn_text_funcs.py ${SEMANTICS} ${CMAKE_SOURCE_DIR}/third_party/qemu-hexagon/attribs_def.h ${INSN_TEXT_FUNCS_CC}
-  COMMAND clang-format -i ${INSN_TEXT_FUNCS_CC} || (exit 0)
+  ${FORMAT_INSN_TEXT_FUNCS}
   DEPENDS gen_insn_text_funcs.py ${CMAKE_SOURCE_DIR}/third_party/qemu-hexagon/hex_common.py ${SEMANTICS} ${CMAKE_SOURCE_DIR}/third_party/qemu-hexagon/attribs_def.h
 )
 
@@ -41,11 +50,10 @@ set_tests_properties(gen_insn_text_funcs_test PROPERTIES
 )
 
 # Generate il funcs.
-set(IL_FUNCS_CC   ${CMAKE_CURRENT_BINARY_DIR}/il_funcs_generated.cc)
 add_custom_command(
   OUTPUT ${IL_FUNCS_CC}
   COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_SOURCE_DIR}/third_party/qemu-hexagon ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/gen_il_funcs.py ${SEMANTICS} ${CMAKE_SOURCE_DIR}/third_party/qemu-hexagon/attribs_def.h ${IL_FUNCS_CC}
-  COMMAND clang-format -i ${IL_FUNCS_CC} || (exit 0)
+  ${FORMAT_IL_FUNCS}
   DEPENDS gen_il_funcs.py gen_il_funcs_data.py ${CMAKE_SOURCE_DIR}/third_party/qemu-hexagon/hex_common.py ${SEMANTICS} ${CMAKE_SOURCE_DIR}/third_party/qemu-hexagon/attribs_def.h
 )
 

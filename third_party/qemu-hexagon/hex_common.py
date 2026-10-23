@@ -96,6 +96,10 @@ def add_bn_attribs():
   for tag in tags:
     attribs = attribdict[tag]
     sem = semdict[tag]
+    # Loop ends jump back to their loop's start through SA0 or SA1, but QEMU
+    # does not mark them as jumps.
+    if attribs & {'A_HWLOOP0_END', 'A_HWLOOP1_END'}:
+      attribs |= {'A_JUMP', 'A_INDIRECT'}
     # Jumps, calls and loop ends that branch only under a condition.
     if attribs & _cof_attribs and _conditional_re.search(sem):
       attribs.add('A_BN_COND_J')

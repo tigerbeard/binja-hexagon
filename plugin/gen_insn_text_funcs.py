@@ -78,11 +78,13 @@ insn_grammar = r"""
     assign_exp: operand ["," reg] [rator] "=" [rator] (operand | exp)     -> assign_to_op
               | operand [rator] "=" [rator] (operand | exp) ";" exp       -> assign_comma
               | exp [subfield] [rator] "=" [rator] (operand | exp) [subfield] -> assign_to_exp
+              | operand "=" operand res_hint                            -> assign_with_hint
 
     rator: "+" | "<<" | "=" | "++" | "-" | "&" | "|" | "^" | "~"
     subfield: ".uh" | ".h" | ".uw" | ".w" | ".ub" | ".b"
+            | ".sf" | ".hf" | ".bf" | ".qf16" | ".qf32" | ".x"
 
-    shift_hint: ":<<1" | ":<<16" | ":>>1" | ":shift"
+    shift_hint: ":<<1" | ":<<16" | ":>>1" | ":>>16" | ":shift"
     rnd_hint: ":rnd" | ":crnd"
     sat_hint: ":sat"
     hilo_hint: ":hi" | ":lo"
@@ -97,6 +99,7 @@ insn_grammar = r"""
     scatter_hint: ":scatter_release"
     nomatch_hint: ":nomatch"
     order_hint: ":at" | ":st"
+    vh_hint: ":v" | ":h"
     ?res_hint: shift_hint [res_hint]
              | rnd_hint [res_hint]
              | sat_hint [res_hint]
@@ -111,11 +114,13 @@ insn_grammar = r"""
              | scatter_hint
              | nomatch_hint
              | order_hint
+             | vh_hint
 
     insn: WORD
         | WORD "." WORD
         | WORD "_" WORD
         | WORD DIGIT ~ 0..2
+        | WORD DIGIT WORD
         | WORD (":t" | ":nt" | "128" | "256")
         | "convert_" WORD "2" WORD
         | "sp" DIGIT "loop" DIGIT
@@ -141,6 +146,7 @@ insn_grammar = r"""
     gp_reg: "gp"
     sys_reg: "pc" | "sgp" DIGIT ":0"? | "r29" | "r31"
     subreg: ".uh" | ".h" | ".uw" | ".w" | ".ub" | ".b"
+          | ".sf" | ".hf" | ".bf" | ".qf16" | ".qf32" | ".x"
     dot_new: ".new"
     dot_cur: ".cur" | ".tmp"
     reg_dot: reg dot_new | pred_reg dot_new
@@ -330,6 +336,11 @@ class InsnTreeTransformer(Transformer):
     return op1 + opt_reg + opt_rator1 + [
         TextToken('" = "'),
     ] + opt_rator2 + op2_or_exp
+
+  # | operand "=" operand res_hint -> assign_with_hint
+  @v_args(inline=True)
+  def assign_with_hint(self, op1, op2, hint):
+    return op1 + [TextToken('" = "')] + op2 + hint
 
   # | operand [rator] "=" [rator] (operand | exp) ";" exp       -> assign_comma
   @v_args(inline=True)
@@ -561,6 +572,7 @@ class InsnTreeTransformer(Transformer):
   chop_hint = wrap_text_terminal
   scatter_hint = wrap_text_terminal
   order_hint = wrap_text_terminal
+  vh_hint = wrap_text_terminal
   nomatch_hint = wrap_text_terminal
   cmp_sign = wrap_text_terminal
   not_sign = wrap_text_terminal

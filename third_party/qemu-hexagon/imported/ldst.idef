@@ -134,7 +134,7 @@ Q6INSN(L2_deallocframe,"Rdd32=deallocframe(Rs32):raw", ATTRIBS(A_LOAD), "Dealloc
   RddV = fFRAME_UNSCRAMBLE(tmp);
   fWRITE_SP(EA+8); })
 
-Q6INSN(L4_return,"Rdd32=dealloc_return(Rs32):raw", ATTRIBS(A_JINDIR,A_LOAD,A_RETURN,A_BN_RETURN), "Deallocate stack frame and return",
+Q6INSN(L4_return,"Rdd32=dealloc_return(Rs32):raw", ATTRIBS(A_JINDIR,A_LOAD,A_RETURN), "Deallocate stack frame and return",
 { fHIDE(size8u_t tmp;) fEA_REG(RsV);
   fLOAD(1,8,u,EA,tmp);
   RddV = fFRAME_UNSCRAMBLE(tmp);
@@ -168,8 +168,8 @@ Q6INSN(L4_return,"Rdd32=dealloc_return(Rs32):raw", ATTRIBS(A_JINDIR,A_LOAD,A_RET
 
 #define RETURN_ATTRIBS A_LOAD,A_RETURN
 
-COND_RETURN_TF(L4_return,,,7,0,SPECULATE_NOT_TAKEN,ATTRIBS(RETURN_ATTRIBS,A_JINDIROLD, A_BN_COND_J),fLSBOLD,PvV,)
-COND_RETURN_NEW(L4_return,12,0,ATTRIBS(RETURN_ATTRIBS,A_JINDIRNEW, A_BN_COND_J))
+COND_RETURN_TF(L4_return,,,7,0,SPECULATE_NOT_TAKEN,ATTRIBS(RETURN_ATTRIBS,A_JINDIROLD),fLSBOLD,PvV,)
+COND_RETURN_NEW(L4_return,12,0,ATTRIBS(RETURN_ATTRIBS,A_JINDIRNEW))
 
 
 

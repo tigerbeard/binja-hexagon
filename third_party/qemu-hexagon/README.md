@@ -4,7 +4,8 @@ This folder is a modified version of [quic/qemu](https://github.com/quic/qemu) H
 
 Local changes include:
 
-*  Added new attribute annotations: `A_BN_COND_J`, `A_BN_RETURN`, `A_BN_SYSTEM`.
+*  Added the plugin's attributes `A_BN_COND_J`, `A_BN_RETURN` and `A_BN_SYSTEM`,
+   which `hex_common.add_bn_attribs` derives from the semantics.
 
 *  Replaces `assert`s with `longjmp`s, so decoder fails gracefully for invalid, non-code input.
 

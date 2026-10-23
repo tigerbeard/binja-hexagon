@@ -81,6 +81,30 @@ def calculate_attribs():
         continue
       macro = macros[macname]
       attribdict[tag] |= set(macro.attribs)
+  add_bn_attribs()
+
+
+# The plugin's own attributes are derived from the semantics, so that the
+# imported instruction definitions need no local changes.
+_cof_attribs = {'A_JUMP', 'A_CALL', 'A_HWLOOP0_END', 'A_HWLOOP1_END'}
+_conditional_re = re.compile(r'\bif\s*\(|\?')
+_return_re = re.compile(r'\bfJUMPR\(\s*REG_LR\b')
+_system_re = re.compile(r'\bf(TRAP|PAUSE)\(')
+
+
+def add_bn_attribs():
+  for tag in tags:
+    attribs = attribdict[tag]
+    sem = semdict[tag]
+    # Jumps, calls and loop ends that branch only under a condition.
+    if attribs & _cof_attribs and _conditional_re.search(sem):
+      attribs.add('A_BN_COND_J')
+    # dealloc_return and `jumpr r31` in all their forms, and rte.
+    if _return_re.search(sem) or tag == 'J2_rte':
+      attribs.add('A_BN_RETURN')
+    # trap0, trap1 and pause.
+    if _system_re.search(sem):
+      attribs.add('A_BN_SYSTEM')
 
 
 def SEMANTICS(tag, beh, sem):

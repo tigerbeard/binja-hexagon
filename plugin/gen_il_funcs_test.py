@@ -416,7 +416,7 @@ SEMANTICS( \
 )
 ATTRIBUTES( \
     "SL2_return_t", \
-    "ATTRIBS(A_JUMP,A_INDIRECT,A_SUBINSN,A_LOAD,A_RESTRICT_SLOT0ONLY,A_RESTRICT_SLOT0ONLY,A_BN_RETURN)" \
+    "ATTRIBS(A_JUMP,A_INDIRECT,A_SUBINSN,A_LOAD,A_RESTRICT_SLOT0ONLY,A_RESTRICT_SLOT0ONLY)" \
 )
 SEMANTICS( \
     "L4_loadri_rr", \
@@ -1072,6 +1072,8 @@ class TestGenIlFunc(unittest.TestCase):
                     4, IlSignExtend(8, IlLowPart(4, IlRegister(8, 'TMP_REG'))))),
             IlSetRegister(4, 'HEX_REG_SP',
                           IlAdd(4, IlRegister(4, 'EA_REG'), IlConst(4, 8))),
+            # A conditional return (#40): the flag says the branch is taken.
+            IlSetRegister(1, 'BRANCH_TAKEN_ARRAY + insn_num', IlConst(1, 1)),
             IlReturn(
                 IlSignExtend(
                     8,
@@ -1080,6 +1082,8 @@ class TestGenIlFunc(unittest.TestCase):
                         IlArithShiftRight(8, IlRegister(8, 'TMP_REG'),
                                           IlConst(1, 32))))), 'done', '}'
         ])
+    self.assertIn('A_BN_COND_J', attribdict['SL2_return_t'])
+    self.assertIn('A_BN_RETURN', attribdict['SL2_return_t'])
 
   def test_loadri_rr(self):
     self.assertEqual(

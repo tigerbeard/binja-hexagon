@@ -79,7 +79,7 @@ Q6INSN(SL2_deallocframe,"deallocframe", ATTRIBS(A_SUBINSN,A_LOAD), "Deallocate s
   fWRITE_FP(fGETWORD(0,tmp));
   fWRITE_SP(EA+8); })
 
-Q6INSN(SL2_return,"dealloc_return", ATTRIBS(A_JINDIR,A_SUBINSN,A_LOAD,A_RETURN,A_RESTRICT_SLOT0ONLY,A_BN_RETURN), "Deallocate stack frame and return",
+Q6INSN(SL2_return,"dealloc_return", ATTRIBS(A_JINDIR,A_SUBINSN,A_LOAD,A_RETURN,A_RESTRICT_SLOT0ONLY), "Deallocate stack frame and return",
 { fHIDE(size8u_t tmp;) fEA_REG(fREAD_FP());
   fLOAD(1,8,u,EA,tmp);
   tmp = fFRAME_UNSCRAMBLE(tmp);
@@ -88,40 +88,40 @@ Q6INSN(SL2_return,"dealloc_return", ATTRIBS(A_JINDIR,A_SUBINSN,A_LOAD,A_RETURN,A
   fWRITE_SP(EA+8);
   fJUMPR(REG_LR,fGETWORD(1,tmp),COF_TYPE_JUMPR);})
 
-Q6INSN(SL2_return_t,"if (p0) dealloc_return", ATTRIBS(A_JINDIROLD,A_SUBINSN,A_LOAD,A_RETURN,A_RESTRICT_SLOT0ONLY,A_BN_RETURN,A_BN_COND_J), "Deallocate stack frame and return",
+Q6INSN(SL2_return_t,"if (p0) dealloc_return", ATTRIBS(A_JINDIROLD,A_SUBINSN,A_LOAD,A_RETURN,A_RESTRICT_SLOT0ONLY), "Deallocate stack frame and return",
 { fHIDE(size8u_t tmp;); fBRANCH_SPECULATE_STALL(fLSBOLD(fREAD_P0()),, SPECULATE_NOT_TAKEN,4,0); fEA_REG(fREAD_FP()); if (fLSBOLD(fREAD_P0())) { fLOAD(1,8,u,EA,tmp); tmp = fFRAME_UNSCRAMBLE(tmp); fWRITE_LR(fGETWORD(1,tmp)); fWRITE_FP(fGETWORD(0,tmp)); fWRITE_SP(EA+8);
   fJUMPR(REG_LR,fGETWORD(1,tmp),COF_TYPE_JUMPR);} else {LOAD_CANCEL(EA);} })
 
-Q6INSN(SL2_return_f,"if (!p0) dealloc_return", ATTRIBS(A_JINDIROLD,A_SUBINSN,A_LOAD,A_RETURN,A_RESTRICT_SLOT0ONLY,A_BN_RETURN,A_BN_COND_J), "Deallocate stack frame and return",
+Q6INSN(SL2_return_f,"if (!p0) dealloc_return", ATTRIBS(A_JINDIROLD,A_SUBINSN,A_LOAD,A_RETURN,A_RESTRICT_SLOT0ONLY), "Deallocate stack frame and return",
 { fHIDE(size8u_t tmp;);fBRANCH_SPECULATE_STALL(fLSBOLDNOT(fREAD_P0()),, SPECULATE_NOT_TAKEN,4,0); fEA_REG(fREAD_FP()); if (fLSBOLDNOT(fREAD_P0())) { fLOAD(1,8,u,EA,tmp); tmp = fFRAME_UNSCRAMBLE(tmp); fWRITE_LR(fGETWORD(1,tmp)); fWRITE_FP(fGETWORD(0,tmp)); fWRITE_SP(EA+8);
   fJUMPR(REG_LR,fGETWORD(1,tmp),COF_TYPE_JUMPR);} else {LOAD_CANCEL(EA);} })
 
 
 
-Q6INSN(SL2_return_tnew,"if (p0.new) dealloc_return:nt", ATTRIBS(A_JINDIRNEW,A_SUBINSN,A_LOAD,A_RETURN,A_RESTRICT_SLOT0ONLY,A_BN_RETURN,A_BN_COND_J), "Deallocate stack frame and return",
+Q6INSN(SL2_return_tnew,"if (p0.new) dealloc_return:nt", ATTRIBS(A_JINDIRNEW,A_SUBINSN,A_LOAD,A_RETURN,A_RESTRICT_SLOT0ONLY), "Deallocate stack frame and return",
 { fHIDE(size8u_t tmp;) fBRANCH_SPECULATE_STALL(fLSBNEW0,, SPECULATE_NOT_TAKEN , 4,3); fEA_REG(fREAD_FP()); if (fLSBNEW0) { fLOAD(1,8,u,EA,tmp); tmp = fFRAME_UNSCRAMBLE(tmp); fWRITE_LR(fGETWORD(1,tmp)); fWRITE_FP(fGETWORD(0,tmp)); fWRITE_SP(EA+8);
   fJUMPR(REG_LR,fGETWORD(1,tmp),COF_TYPE_JUMPR);} else {LOAD_CANCEL(EA);} })
 
-Q6INSN(SL2_return_fnew,"if (!p0.new) dealloc_return:nt", ATTRIBS(A_JINDIRNEW,A_SUBINSN,A_LOAD,A_RETURN,A_RESTRICT_SLOT0ONLY,A_BN_RETURN,A_BN_COND_J), "Deallocate stack frame and return",
+Q6INSN(SL2_return_fnew,"if (!p0.new) dealloc_return:nt", ATTRIBS(A_JINDIRNEW,A_SUBINSN,A_LOAD,A_RETURN,A_RESTRICT_SLOT0ONLY), "Deallocate stack frame and return",
 { fHIDE(size8u_t tmp;) fBRANCH_SPECULATE_STALL(fLSBNEW0NOT,, SPECULATE_NOT_TAKEN , 4,3); fEA_REG(fREAD_FP()); if (fLSBNEW0NOT) { fLOAD(1,8,u,EA,tmp); tmp = fFRAME_UNSCRAMBLE(tmp); fWRITE_LR(fGETWORD(1,tmp)); fWRITE_FP(fGETWORD(0,tmp)); fWRITE_SP(EA+8);
   fJUMPR(REG_LR,fGETWORD(1,tmp),COF_TYPE_JUMPR);} else {LOAD_CANCEL(EA);} })
 
 
-Q6INSN(SL2_jumpr31,"jumpr r31",ATTRIBS(A_SUBINSN,A_JINDIR,A_RESTRICT_SLOT0ONLY,A_BN_RETURN),"indirect unconditional jump",
+Q6INSN(SL2_jumpr31,"jumpr r31",ATTRIBS(A_SUBINSN,A_JINDIR,A_RESTRICT_SLOT0ONLY),"indirect unconditional jump",
 { fJUMPR(REG_LR,fREAD_LR(),COF_TYPE_JUMPR);})
 
-Q6INSN(SL2_jumpr31_t,"if (p0) jumpr r31",ATTRIBS(A_SUBINSN,A_JINDIROLD,A_RESTRICT_SLOT0ONLY,A_BN_RETURN,A_BN_COND_J),"indirect conditional jump if true",
+Q6INSN(SL2_jumpr31_t,"if (p0) jumpr r31",ATTRIBS(A_SUBINSN,A_JINDIROLD,A_RESTRICT_SLOT0ONLY),"indirect conditional jump if true",
 {fBRANCH_SPECULATE_STALL(fLSBOLD(fREAD_P0()),, SPECULATE_TAKEN,4,0); if (fLSBOLD(fREAD_P0())) {fJUMPR(REG_LR,fREAD_LR(),COF_TYPE_JUMPR);}})
 
-Q6INSN(SL2_jumpr31_f,"if (!p0) jumpr r31",ATTRIBS(A_SUBINSN,A_JINDIROLD,A_RESTRICT_SLOT0ONLY,A_BN_RETURN,A_BN_COND_J),"indirect conditional jump if false",
+Q6INSN(SL2_jumpr31_f,"if (!p0) jumpr r31",ATTRIBS(A_SUBINSN,A_JINDIROLD,A_RESTRICT_SLOT0ONLY),"indirect conditional jump if false",
 {fBRANCH_SPECULATE_STALL(fLSBOLDNOT(fREAD_P0()),, SPECULATE_TAKEN,4,0); if (fLSBOLDNOT(fREAD_P0())) {fJUMPR(REG_LR,fREAD_LR(),COF_TYPE_JUMPR);}})
 
 
 
-Q6INSN(SL2_jumpr31_tnew,"if (p0.new) jumpr:nt r31",ATTRIBS(A_SUBINSN,A_JINDIRNEW,A_RESTRICT_SLOT0ONLY,A_BN_RETURN,A_BN_COND_J),"indirect conditional jump if true",
+Q6INSN(SL2_jumpr31_tnew,"if (p0.new) jumpr:nt r31",ATTRIBS(A_SUBINSN,A_JINDIRNEW,A_RESTRICT_SLOT0ONLY),"indirect conditional jump if true",
 {fBRANCH_SPECULATE_STALL(fLSBNEW0,, SPECULATE_NOT_TAKEN , 4,3); if (fLSBNEW0) {fJUMPR(REG_LR,fREAD_LR(),COF_TYPE_JUMPR);}})
 
-Q6INSN(SL2_jumpr31_fnew,"if (!p0.new) jumpr:nt r31",ATTRIBS(A_SUBINSN,A_JINDIRNEW,A_RESTRICT_SLOT0ONLY,A_BN_RETURN,A_BN_COND_J),"indirect conditional jump if false",
+Q6INSN(SL2_jumpr31_fnew,"if (!p0.new) jumpr:nt r31",ATTRIBS(A_SUBINSN,A_JINDIRNEW,A_RESTRICT_SLOT0ONLY),"indirect conditional jump if false",
 {fBRANCH_SPECULATE_STALL(fLSBNEW0NOT,, SPECULATE_NOT_TAKEN , 4,3); if (fLSBNEW0NOT) {fJUMPR(REG_LR,fREAD_LR(),COF_TYPE_JUMPR);}})
 
 

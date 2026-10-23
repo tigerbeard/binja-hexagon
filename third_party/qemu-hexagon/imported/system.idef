@@ -25,12 +25,12 @@
 /* User->OS interface                       */
 /********************************************/
 
-Q6INSN(J2_trap0,"trap0(#u8)",ATTRIBS(A_COF, A_BN_SYSTEM),
+Q6INSN(J2_trap0,"trap0(#u8)",ATTRIBS(A_COF),
 "Trap to Operating System",
     fTRAP(0,uiV);
 )
 
-Q6INSN(J2_trap1,"trap1(Rx32,#u8)",ATTRIBS(A_COF, A_BN_SYSTEM),
+Q6INSN(J2_trap1,"trap1(Rx32,#u8)",ATTRIBS(A_COF),
 "Trap to Operating System",
     /*
      * Note: if RxV is not written, we get the same as the input.
@@ -49,10 +49,10 @@ Q6INSN(J2_trap1,"trap1(Rx32,#u8)",ATTRIBS(A_COF, A_BN_SYSTEM),
     })
 
 
-Q6INSN(J2_pause,"pause(#u8)",ATTRIBS(A_COF, A_BN_SYSTEM),
+Q6INSN(J2_pause,"pause(#u8)",ATTRIBS(A_COF),
 "Enter low-power state for #u8 cycles",{fPAUSE(uiV);})
 
-Q6INSN(J2_rte,  "rte", ATTRIBS(A_PRIV, A_BN_RETURN),
+Q6INSN(J2_rte,  "rte", ATTRIBS(A_PRIV),
 "Return from Exception",
 {
 fHIDE(if((thread->timing_on) && (thread->status & EXEC_STATUS_REPLAY)) { return; })

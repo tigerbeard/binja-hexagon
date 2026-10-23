@@ -479,6 +479,29 @@ new_predicate:
     self.assertIn('return 7', hlil)
     self.assertIn('return 1', hlil)
 
+  def test_conditional_dealloc_returns(self):
+    # #40: predicated dealloc_return lifted as a jump through an unset temp.
+    funcs = self.analyse('''
+old_predicate:
+  { allocframe(#8) }
+  { p0 = cmp.eq(r0, #0); r0 = #7 }
+  { if (p0) dealloc_return }
+  { r0 = #1 }
+  { dealloc_return }
+new_predicate:
+  { allocframe(#8) }
+  { p0 = cmp.gt(r0, #5); if (p0.new) dealloc_return:nt }
+  { r0 = add(r0, #1) }
+  { dealloc_return }
+''')
+    for f in funcs.values():
+      il = hexasm.llil(f)
+      self.assertEqual(il.count('<return> jump(LR)'), 2, il)
+      self.assertNotRegex(il, r'jump\(temp')
+    hlil = hexasm.hlil(funcs['old_predicate'])
+    self.assertIn('return 7', hlil)
+    self.assertIn('return 1', hlil)
+
 
 class TestHardwareLoops(SnippetTest):
   # #7: the packet that ends a hardware loop reported no branch back to the

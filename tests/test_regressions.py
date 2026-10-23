@@ -299,5 +299,61 @@ f:
 { jumpr LR }''')
 
 
+class TestIntrinsics(SnippetTest):
+  # #1: opcodes without lifted semantics were lifted as LLIL_UNDEF, which ends
+  # the function's IL. They are intrinsics now.
+
+  def test_unlifted_op_does_not_end_the_il(self):
+    f = self.analyse('''
+f:
+  { r0 = asl(r1, r2) }
+  { r0 = add(r0, #3) }
+  { jumpr r31 }
+''')['f']
+    self.assertEqual(hexasm.hlil(f), '''
+return S2_asl_r_r(arg2, arg3) + 3''')
+
+  def test_pair_output_is_eight_bytes(self):
+    f = self.analyse('''
+f:
+  { r1:0 = sxtw(r2) }
+  { memd(r29+#8) = r1:0 }
+  { jumpr r31 }
+''')['f']
+    il = hexasm.llil(f)
+    self.assertIn('0: temp#0 = A2_sxtw(R2)', il)
+    self.assertIn('1: R1:R0 = temp#0.q', il)
+    self.assertIn('int64_t arg_8 = A2_sxtw(arg3)', hexasm.hlil(f))
+
+  def test_load_after_unlifted_store_is_not_folded(self):
+    # dczeroa is a memory intrinsic, so the earlier store's value does not
+    # reach the load.
+    f = self.analyse('''
+f:
+  { memw(r0+#0) = r1 }
+  { dczeroa(r0) }
+  { r2 = memw(r0+#0) }
+  { r0 = r2 }
+  { jumpr r31 }
+''')['f']
+    self.assertEqual(hexasm.hlil(f), '''
+*arg1 = arg2
+Y2_dczeroa(arg1)
+return *arg1''')
+
+  def test_post_increment_load_writes_both_registers(self):
+    f = self.analyse('''
+f:
+  { m0 = r3 }
+  { r2 = memw(r0++m0) }
+  { r0 = add(r0, r2) }
+  { jumpr r31 }
+''')['f']
+    il = hexasm.llil(f)
+    self.assertRegex(il, r'temp#\d+, temp#\d+ = L2_loadri_pr\(temp#\d+\.d, M0\)')
+    self.assertIn('R0 = ', il)
+    self.assertIn('R2 = ', il)
+
+
 if __name__ == '__main__':
   unittest.main()

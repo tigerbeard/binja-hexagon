@@ -44,7 +44,9 @@ absl::Status FillBnInstructionLowLevelImpl(Architecture *arch, uint64_t pc,
                                            int insn_num, PacketContext &ctx) {
   LowLevelILFunction &il = ctx.IL();
   if (opcode_liftptr[insn.opcode] == nullptr) {
-    il.AddInstruction(il.Undefined());
+    // Every opcode has a lifter (most unlifted ones are intrinsics), so this
+    // is unexpected. Unimplemented, unlike Undefined, does not end the IL.
+    il.AddInstruction(il.Unimplemented());
 #ifndef NDEBUG
     LOG(INFO) << "Unsupported lifter for '" << opcode_names[insn.opcode]
               << "' at " << std::hex << "0x" << pc;

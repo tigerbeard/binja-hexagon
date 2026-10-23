@@ -22,6 +22,7 @@
 #include "plugin/hex_regs.h"
 #include "plugin/il_util.h"
 #include "plugin/insn_util.h"
+#include "plugin/packet_context.h"
 #include "plugin/decoder.h"
 #include "plugin/relocs.h"
 #include "plugin/text_util.h"
@@ -243,19 +244,9 @@ public:
   }
 
   virtual BNRegisterInfo GetRegisterInfo(uint32_t reg) override {
-    // Skip temp registers.
     if (LLIL_REG_IS_TEMP(reg)) {
-      // TODO: map single 32b registers to 64b pairs in LLIL_TEMP register
-      // space.
-      switch (LLIL_GET_TEMP_REG_INDEX(reg)) {
-      case HEX_REG_P0:
-      case HEX_REG_P1:
-      case HEX_REG_P2:
-      case HEX_REG_P3:
-        return BNRegisterInfo{reg, 0, 1, NoExtend};
-      default:
-        return BNRegisterInfo{reg, 0, 4, NoExtend};
-      }
+      return BNRegisterInfo{reg, 0, TempRegSize(LLIL_GET_TEMP_REG_INDEX(reg)),
+                            NoExtend};
     }
 
     // All registers are 32bit long.

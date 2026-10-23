@@ -29,12 +29,12 @@ namespace {
 
 using namespace BinaryNinja;
 
-std::unique_ptr<TempReg> MakeTempReg(bool rw, int size, int reg,
+std::unique_ptr<TempReg> MakeTempReg(bool rw, int size, int reg, int subspace,
                                      LowLevelILFunction &il) {
   if (rw) {
-    return absl::make_unique<DestReadWriteReg>(size, reg, il);
+    return absl::make_unique<DestReadWriteReg>(size, reg, subspace, il);
   } else {
-    return absl::make_unique<DestWriteOnlyReg>(size, reg);
+    return absl::make_unique<DestWriteOnlyReg>(size, reg, subspace);
   }
 }
 
@@ -109,30 +109,46 @@ int PacketContext::AddDestReadWritePredReg(int reg) {
 }
 
 int PacketContext::AddDestReg(bool rw, int size, int reg) {
-  auto it = regs_.find(reg);
+  // Pairs have their own subspace, so a packet that writes both a register
+  // and a pair containing it keeps two temps.
+  const int subspace = size == 8 ? kDestPairSubspace : kSingleRegSubspace;
+  const int key = subspace * NUM_HEX_REGS + reg;
+  auto it = regs_.find(key);
   if (it == regs_.end()) {
-    auto out = regs_.emplace(reg, MakeTempReg(rw, size, reg, il_));
-    DCHECK(out.second);
-    it = out.first;
-  } else {
-    // TODO: handle the case where a dest register appears as a single 32b
-    // register, and a 64b pair. For example,
-    //
-    //   {  if (p0) r0 = #0
-    //      if (p0) r1 = #0
-    //      if (!p0) r1:0 = memd(r3+#0) }
-    //
-    if (size != it->second->Size()) {
-      LOG(WARNING) << "Req to add DestReg " << reg << " of size " << size
-                   << " when it is already registered with size "
-                   << it->second->Size();
-    }
+    it = regs_.emplace(key, MakeTempReg(rw, size, reg, subspace, il_)).first;
   }
   return it->second->Reg();
 }
 
 void PacketContext::WriteClobberedRegs() {
+  // Single registers are written back before pairs. A packet may write a
+  // register and a pair containing it only under complementary predicates;
+  // then the pair's write-back wins, whichever instruction executed.
   for (auto &r : regs_) {
     r.second->CopyFromTemp(il_);
   }
+}
+
+size_t TempRegSize(uint32_t index) {
+  if (index < kFixedTempBase) {
+    switch (index / NUM_HEX_REGS) {
+    case kSourcePairSubspace:
+    case kDestPairSubspace:
+      return 8;
+    default: {
+      const uint32_t reg = index % NUM_HEX_REGS;
+      return (reg >= HEX_REG_P0 && reg <= HEX_REG_P3) ? 1 : 4;
+    }
+    }
+  }
+  if (index == static_cast<uint32_t>(LLIL_GET_TEMP_REG_INDEX(EA_REG))) {
+    return 4;
+  }
+  if (index < kBranchDestBase) {
+    return 8; // TMP_REG, WIDTH_REG, OFFSET_REG and SHAMT_REG.
+  }
+  if (index < kBranchTakenBase) {
+    return 4;
+  }
+  return 1;
 }

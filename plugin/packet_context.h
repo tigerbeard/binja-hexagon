@@ -27,11 +27,46 @@
 #include "plugin/hex_regs.h"
 #include "third_party/qemu-hexagon/insn.h"
 
-// Holds indirect branch destinations.
-#define BRANCHR_DEST_ARRAY LLIL_TEMP(200)
+// LLIL_TEMP register layout.
+//
+// Each packet register temp lives in one of three subspaces of NUM_HEX_REGS
+// temps, indexed by HEX_REG number: single registers (including predicates),
+// source register pairs, and destination register pairs. Pairs have their own
+// subspaces so that a pair never shares a temp with one of its halves, or
+// with a source pair read in the same packet. The generated lifters' fixed
+// temps follow all three subspaces.
+enum TempSubspace {
+  kSingleRegSubspace = 0,
+  kSourcePairSubspace = 1,
+  kDestPairSubspace = 2,
+  kNumTempSubspaces = 3,
+};
 
-// Holds conditional branch results.
-#define BRANCH_TAKEN_ARRAY LLIL_TEMP(210)
+constexpr int kFixedTempBase = kNumTempSubspaces * NUM_HEX_REGS;
+
+// Effective address, and the generated lifters' scratch values.
+#define EA_REG LLIL_TEMP(kFixedTempBase + 0)
+#define TMP_REG LLIL_TEMP(kFixedTempBase + 1)
+#define WIDTH_REG LLIL_TEMP(kFixedTempBase + 2)
+#define OFFSET_REG LLIL_TEMP(kFixedTempBase + 3)
+#define SHAMT_REG LLIL_TEMP(kFixedTempBase + 4)
+constexpr int kNumScratchTemps = 5;
+
+// Holds indirect branch destinations, one per instruction in the packet.
+constexpr int kBranchDestBase = kFixedTempBase + kNumScratchTemps;
+#define BRANCHR_DEST_ARRAY LLIL_TEMP(kBranchDestBase)
+
+// Holds conditional branch results, one per instruction in the packet.
+constexpr int kBranchTakenBase = kBranchDestBase + INSTRUCTIONS_MAX;
+#define BRANCH_TAKEN_ARRAY LLIL_TEMP(kBranchTakenBase)
+
+constexpr int kNumTemps = kBranchTakenBase + INSTRUCTIONS_MAX;
+
+static_assert(HEX_REG_USR_LPCFG < NUM_HEX_REGS,
+              "every HEX_REG must fit in one temp subspace");
+
+// Returns the size in bytes of the LLIL_TEMP register with |index|.
+size_t TempRegSize(uint32_t index);
 
 // Maps insn.regno and regtype ('R', 'P') from insn type
 // to HEX_REG enum value:
@@ -73,8 +108,9 @@ protected:
 // Register value is copied on construction.
 class SourceReg : public TempReg {
 public:
-  SourceReg(int size, int reg, BinaryNinja::LowLevelILFunction &il)
-      : TempReg(size, reg, /*subspace=*/0) {
+  SourceReg(int size, int reg, int subspace,
+            BinaryNinja::LowLevelILFunction &il)
+      : TempReg(size, reg, subspace) {
     CopyToTemp(il);
   }
   ~SourceReg() override = default;
@@ -82,14 +118,12 @@ public:
   SourceReg &operator=(const SourceReg &) = delete;
 };
 
-// Reads a register pair value on construction.
-// Uses a separate LLIL_TEMP subspace to avoid collision with other temporary
-// register pairs in the packet.
-// See https://github.com/google/binja-hexagon/issues/5 for details.
+// Reads a register pair value on construction, into the source pair
+// subspace, so it cannot collide with temps written in the packet.
 class SourcePairReg : public TempReg {
 public:
   SourcePairReg(int reg, BinaryNinja::LowLevelILFunction &il)
-      : TempReg(/*size=*/8, reg, /*subspace=*/1) {
+      : TempReg(/*size=*/8, reg, kSourcePairSubspace) {
     CopyToTemp(il);
   }
   ~SourcePairReg() override = default;
@@ -99,7 +133,8 @@ public:
 
 class DestWriteOnlyReg : public TempReg {
 public:
-  DestWriteOnlyReg(int size, int reg) : TempReg(size, reg, /*subspace=*/0) {}
+  DestWriteOnlyReg(int size, int reg, int subspace)
+      : TempReg(size, reg, subspace) {}
   ~DestWriteOnlyReg() override = default;
   DestWriteOnlyReg(const DestWriteOnlyReg &) = delete;
   DestWriteOnlyReg &operator=(const DestWriteOnlyReg &) = delete;
@@ -110,8 +145,9 @@ public:
 // when PacketContext.WriteClobberedRegs() is called.
 class DestReadWriteReg : public SourceReg {
 public:
-  DestReadWriteReg(int size, int reg, BinaryNinja::LowLevelILFunction &il)
-      : SourceReg(size, reg, il) {}
+  DestReadWriteReg(int size, int reg, int subspace,
+                   BinaryNinja::LowLevelILFunction &il)
+      : SourceReg(size, reg, subspace, il) {}
   ~DestReadWriteReg() override = default;
   DestReadWriteReg(const DestReadWriteReg &) = delete;
   DestReadWriteReg &operator=(const DestReadWriteReg &) = delete;

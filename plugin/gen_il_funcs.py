@@ -927,7 +927,7 @@ class SemanticsTreeTransformer(Transformer):
     if op.type == 'REG_OLD':
       if op.startswith('P'):
         op = IlRegister(1, op)
-      elif re.search(r'dd|ss|tt|uu|vv', op):
+      elif is_pair_operand(op):
         # Pair
         op = IlRegister(8, op)
       else:
@@ -935,7 +935,7 @@ class SemanticsTreeTransformer(Transformer):
     elif op.type == 'REG_NEW':
       if op.startswith('P'):
         op = IlRegister(1, op)
-      elif re.search(r'dd|ss|tt|uu|vv', op):
+      elif is_pair_operand(op):
         # Pair
         op = IlRegister(8, op)
       else:
@@ -1795,6 +1795,12 @@ class SemanticsTreeTransformer(Transformer):
     raise ValueError('Unexpected grammar rule in insn semantics')
 
 
+def is_pair_operand(op):
+  # Register operands are a type letter, a register id and V (old value) or
+  # N (new value): RdV, RssV, RxxV. A doubled id letter is a register pair.
+  return re.fullmatch(r'[A-Z]([a-z])\1[VN]', str(op)) is not None
+
+
 def genptr_decl(tag, regtype, regid, regno):
   mapped_regno = 'MapRegNum(\'{0}\', insn.regno[{1}])'.format(regtype, regno)
   if (regtype == 'R'):
@@ -2156,11 +2162,8 @@ using namespace BinaryNinja;
 #define PCALIGN 4
 #define PCALIGN_MASK (PCALIGN - 1)
 
-#define EA_REG  LLIL_TEMP(100)
-#define TMP_REG LLIL_TEMP(101)
-#define WIDTH_REG LLIL_TEMP(104)
-#define OFFSET_REG LLIL_TEMP(105)
-#define SHAMT_REG LLIL_TEMP(106)
+// EA_REG, TMP_REG, WIDTH_REG, OFFSET_REG and SHAMT_REG come from
+// packet_context.h, with the rest of the LLIL_TEMP layout.
 
 ''')
 

@@ -18,7 +18,8 @@
   with Qemu() as qemu:
     regs = qemu.run(code, {'r1': 10, 'r2': 32}, packets=1)
 
-QEMU executes one packet per single step. Code goes into RAM at CODE_ADDR,
+QEMU executes one packet per single step. write_memory and read_memory reach
+RAM directly. Code goes into RAM at CODE_ADDR,
 or the address given, and runs from there; the registers named in the result are the general
 registers r0-r31, the predicates p0-p3, m0, m1 and usr.
 
@@ -114,6 +115,23 @@ class Qemu:
   def _get(self, name):
     return int.from_bytes(bytes.fromhex(self._send('p%x' % REGNUM[name])),
                           'little')
+
+  def write_memory(self, address, data):
+    for offset in range(0, len(data), 1024):
+      chunk = data[offset:offset + 1024]
+      if self._send('M%x,%x:%s' % (address + offset, len(chunk),
+                                   chunk.hex())) != 'OK':
+        raise RuntimeError('cannot write memory at %#x' % (address + offset))
+
+  def read_memory(self, address, size):
+    data = b''
+    for offset in range(0, size, 1024):
+      reply = self._send('m%x,%x' % (address + offset,
+                                     min(1024, size - offset)))
+      if reply.startswith('E'):
+        raise RuntimeError('cannot read memory at %#x' % (address + offset))
+      data += bytes.fromhex(reply)
+    return data
 
   def run(self, code, regs, packets, address=CODE_ADDR):
     """Runs |packets| packets of |code| from |address|, with the registers in

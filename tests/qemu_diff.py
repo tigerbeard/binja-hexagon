@@ -21,8 +21,14 @@
 Each instruction gets random encodings (iset.py, as llvm_diff.py) and random
 register values. QEMU runs the instruction as a packet of its own; the
 plugin's LLIL for the same packet runs in llil_eval. Registers r0-r31, p0-p3
-and m0-m1 must agree afterwards. Branches, loads, stores, system, HVX,
-new-value and duplex instructions are left out.
+and m0-m1 must agree afterwards, and so must the bytes the lifted IL stores.
+
+Loads and stores address a data window that holds the same random bytes in
+QEMU and in llil_eval: the base register (and GP) point into it, an index
+register is a small multiple of 8, and m0/m1 hold small increments. Absolute addresses
+(which need constant extenders), locked, circular and bit-reversed accesses
+are left out, as are branches, system, HVX, new-value and duplex
+instructions.
 
 Predicates: the plugin writes compare results as 1 where the hardware writes
 0xff, so a predicate matches when both are 0 or the plugin's is 1 and QEMU's
@@ -49,8 +55,7 @@ JUMPR_LR = 0x529fc000
 
 # Attributes of instructions this comparison cannot run or does not model.
 EXCLUDED_ATTRIBS = {
-    'A_JUMP', 'A_CALL', 'A_COF', 'A_LOAD', 'A_STORE', 'A_MEMLIKE',
-    'A_MEMLIKE_PACKET_RULES', 'A_PRIV', 'A_GUEST', 'A_EXTENSION', 'A_CVI',
+    'A_JUMP', 'A_CALL', 'A_COF', 'A_PRIV', 'A_GUEST', 'A_EXTENSION', 'A_CVI',
     'A_DOTNEWVALUE', 'A_SUBINSN', 'A_HWLOOP0_SETUP', 'A_HWLOOP1_SETUP',
     'A_HWLOOP0_END', 'A_HWLOOP1_END', 'A_IMPLICIT_WRITES_SP', 'A_FPOP',
 }
@@ -58,9 +63,19 @@ EXCLUDED_ATTRIBS = {
 # brkpt stops QEMU.
 EXCLUDED_TAGS = {'Y2_break'}
 
+MEMORY_ATTRIBS = {'A_LOAD', 'A_STORE', 'A_MEMLIKE', 'A_MEMLIKE_PACKET_RULES'}
+
+# The data window for loads and stores.
+DATA_BASE = 0x100000
+DATA_SIZE = 0x80000
+# A memory operand: mem*(Rs32+...), mem*(Rx32++...) or mem*(gp+...), and
+# the index register of mem*(Rs32+Ru32<<#u2).
+_MEMORY_OPERAND = re.compile(r'mem\w*\((?:(R[a-z]{1,2})32|gp)(?:\+\+|\+|\))')
+_INDEX = re.compile(r'\+\s*R([a-z])32\s*<<')
+
 QEMU_TO_BN = dict({'r%d' % i: 'R%d' % i for i in range(29)},
                   r29='SP', r30='FP', r31='LR', p0='P0', p1='P1', p2='P2',
-                  p3='P3', m0='M0', m1='M1', usr='USR')
+                  p3='P3', m0='M0', m1='M1', usr='USR', gp='GP')
 COMPARED = ['r%d' % i for i in range(32)] + ['p0', 'p1', 'p2', 'p3', 'm0',
                                                'm1']
 
@@ -87,6 +102,12 @@ def testable(tag, attribs, iset):
     return False
   enc = info['enc'].replace(' ', '')
   syntax = info['syntax']
+  if attribs.get(tag, set()) & MEMORY_ATTRIBS and (
+      not _MEMORY_OPERAND.search(syntax) or tag.startswith('Y') or
+      re.search(r'locked|:circ|:brev|phys', syntax) or
+      # V79 :nt stores, which QEMU's newest CPU (V73) does not have.
+      ':nt' in syntax):
+    return False
   return (len(enc) == 32 and 'PP' in info['enc'] and
           not attribs.get(tag, set()) & EXCLUDED_ATTRIBS and
           # New values need their producer in the packet.
@@ -132,8 +153,57 @@ def random_value(rng):
 def random_regs(rng):
   regs = {'r%d' % i: random_value(rng) for i in range(32)}
   regs.update({'p%d' % i: rng.choice((0, 0xff)) for i in range(4)})
-  regs.update(m0=rng.getrandbits(32), m1=rng.getrandbits(32))
+  regs.update(m0=rng.getrandbits(32), m1=rng.getrandbits(32), gp=DATA_BASE)
   return regs
+
+
+def field(info, word, letter):
+  """The value of |word|'s encoding field |letter|."""
+  value = 0
+  for i, b in enumerate(info['enc'].replace(' ', '')):
+    if b == letter:
+      value = (value << 1) | ((word >> (31 - i)) & 1)
+  return value
+
+
+def memory_case(info, rng):
+  """A word and registers for a load or store: the base register points into
+  the middle of the data window, an index register is small and m0/m1 hold
+  small increments. None if base and index are one register."""
+  word = random_word(info, rng)
+  regs = random_regs(rng)
+  base = _MEMORY_OPERAND.search(info['syntax']).group(1)
+  index = _INDEX.search(info['syntax'])
+  numbers = {}
+  if base:
+    numbers['base'] = field(info, word, base[1])
+  if index:
+    numbers['index'] = field(info, word, index.group(1))
+  if len(set(numbers.values())) < len(numbers):
+    return None
+  if base:
+    regs['r%d' % numbers['base']] = (DATA_BASE + DATA_SIZE // 2 +
+                                      8 * rng.randrange(0x400))
+  if index:
+    # A multiple of 8 keeps any scaled address aligned, as accesses must be.
+    regs['r%d' % numbers['index']] = 8 * rng.randrange(8)
+  regs['m0'] = (8 * rng.randrange(-8, 8)) & 0xffffffff
+  regs['m1'] = (8 * rng.randrange(-8, 8)) & 0xffffffff
+  return word, regs
+
+
+class WindowMemory(dict):
+  """The data window's bytes, and the stores into it."""
+
+  def __init__(self, data):
+    super().__init__()
+    self.data = data
+
+  def __missing__(self, address):
+    offset = address - DATA_BASE
+    if 0 <= offset < len(self.data):
+      return self.data[offset]
+    raise KeyError(address)
 
 
 def bn_regs(regs):
@@ -152,6 +222,7 @@ def agree(name, bn, qemu):
 
 def compare(binja, cases):
   """Runs |cases| [(tag, word, regs)]; returns {tag: [mismatch text]}."""
+  data = random.Random(1).randbytes(DATA_SIZE)
   code = b''.join(w.to_bytes(4, 'little') + JUMPR_LR.to_bytes(4, 'little')
                   for _, w, _ in cases)
   bv = hexasm.load(binja, hexasm.Snippet(
@@ -159,10 +230,12 @@ def compare(binja, cases):
   problems = collections.defaultdict(list)
   try:
     with qemu_oracle.Qemu() as qemu:
+      qemu.write_memory(DATA_BASE, data)
       for i, (tag, word, regs) in enumerate(cases):
         func = bv.get_function_at(8 * i)
+        memory, stores = WindowMemory(data), []
         try:
-          bn = llil_eval.evaluate(func, bn_regs(regs))
+          bn = llil_eval.evaluate(func, bn_regs(regs), memory, stores)
         except llil_eval.Unsupported as e:
           problems[tag].append('{:08x}: {}'.format(word, e))
           continue
@@ -175,6 +248,16 @@ def compare(binja, cases):
             for name in COMPARED
             if not agree(name, bn.get(QEMU_TO_BN[name], -1), hw[name])
         ]
+        for address, size in stores:
+          mine = bytes(memory[address + j] for j in range(size))
+          theirs = qemu.read_memory(address, size)
+          if mine != theirs:
+            diffs.append('mem[{:#x}]: plugin {} qemu {}'.format(
+                address, mine.hex(), theirs.hex()))
+          # Restore the window for the next case.
+          offset = address - DATA_BASE
+          if 0 <= offset and offset + size <= DATA_SIZE:
+            qemu.write_memory(address, data[offset:offset + size])
         if diffs:
           inputs = ' '.join('{}={:#x}'.format(k, v) for k, v in regs.items()
                             if k in ('r%d' % n for n in range(32)) or
@@ -186,10 +269,20 @@ def compare(binja, cases):
   return problems
 
 
-def cases_for(tags, iset, samples, seed=0):
+def cases_for(tags, iset, samples, seed=0, attribs=None):
   rng = random.Random(seed)
-  return [(tag, random_word(iset[tag], rng), random_regs(rng))
-          for tag in tags for _ in range(samples)]
+  attribs = op_attribs() if attribs is None else attribs
+  cases = []
+  for tag in tags:
+    for _ in range(samples):
+      if attribs.get(tag, set()) & MEMORY_ATTRIBS:
+        case = None
+        while case is None:
+          case = memory_case(iset[tag], rng)
+        cases.append((tag,) + case)
+      else:
+        cases.append((tag, random_word(iset[tag], rng), random_regs(rng)))
+  return cases
 
 
 def main():

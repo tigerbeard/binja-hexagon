@@ -20,8 +20,9 @@
 Values are unsigned integers of their expression's size. Shifts are
 mathematical: shifting by the width or more gives 0 (or the sign, for an
 arithmetic right shift). Evaluation stops at the first jump, return or call.
-Intrinsics, unimplemented IL and reads of registers or temps that were never
-written raise Unsupported, so lifting bugs of that kind surface as errors.
+Intrinsics, unimplemented IL, reads of registers or temps that were never
+written and loads from unmapped memory raise Unsupported, so lifting bugs of
+that kind surface as errors.
 """
 
 import binaryninja as binja
@@ -83,6 +84,7 @@ class _Machine:
     self.arch = arch
     self.full = {}
     self.memory = memory
+    self.stores = []
     for name, value in regs.items():
       self.write(name, value, self._info(name)[2])
 
@@ -150,7 +152,10 @@ class _Machine:
       return int(self.value(expr.src) != 0)
     if op == Op.LLIL_LOAD:
       address = self.value(expr.src)
-      data = bytes(self.memory.get(address + i, 0) for i in range(size))
+      try:
+        data = bytes(self.memory[address + i] for i in range(size))
+      except KeyError:
+        raise Unsupported('load from unmapped {:#x}'.format(address))
       return int.from_bytes(data, 'little')
     raise Unsupported('expression {} ({})'.format(op.name, expr))
 
@@ -175,6 +180,7 @@ class _Machine:
         address = self.value(insn.dest)
         for i in range(insn.size):
           self.memory[address + i] = (value >> (8 * i)) & 0xff
+        self.stores.append((address, insn.size))
       elif op == Op.LLIL_IF:
         index = insn.true if self.value(insn.condition) else insn.false
       elif op == Op.LLIL_GOTO:
@@ -188,9 +194,13 @@ class _Machine:
         raise Unsupported('instruction {} ({})'.format(op.name, insn))
 
 
-def evaluate(func, regs, memory=None):
+def evaluate(func, regs, memory=None, stores=None):
   """Runs |func|'s LLIL from its start on |regs| ({name: value}), and returns
-  the registers after it."""
+  the registers after it. |memory| maps addresses to bytes (a load from an
+  address it lacks raises Unsupported) and takes the stores; |stores|, a
+  list, gets the (address, size) of each."""
   machine = _Machine(func.arch, regs, {} if memory is None else memory)
   machine.run(func.llil)
+  if stores is not None:
+    stores.extend(machine.stores)
   return machine.regs()

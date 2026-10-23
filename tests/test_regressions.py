@@ -1025,7 +1025,7 @@ class TestAgainstQemu(SnippetTest):
     attribs = qemu_diff.op_attribs()
     tags = [t for t in qemu_diff.lifted_tags()
             if qemu_diff.testable(t, attribs, iset)]
-    self.assertGreater(len(tags), 340)
+    self.assertGreater(len(tags), 900)
     problems = qemu_diff.compare(binja, qemu_diff.cases_for(tags, iset, 4))
     self.assertEqual(
         {tag: texts[0] for tag, texts in problems.items()}, {})

@@ -124,7 +124,8 @@ int PacketContext::AddDestReg(bool rw, int size, int reg) {
 }
 
 void PacketContext::WritePredicate(int temp, ExprId value) {
-  if (!written_predicates_.insert(temp).second) {
+  auto [writer, first] = predicate_writers_.emplace(temp, insn_num_);
+  if (!first && writer->second != insn_num_) {
     value = il_.And(1, il_.Register(1, temp), value);
   }
   il_.AddInstruction(il_.SetRegister(1, temp, value));

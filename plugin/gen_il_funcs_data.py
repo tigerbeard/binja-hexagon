@@ -263,5 +263,20 @@ SUPPORTED_TAGS = [
     'S2_storeri_pi_nt', 'S2_storerd_pi_nt', 'S2_pstorerbt_pi_nt',
     'S2_pstorerbf_pi_nt', 'S2_pstorerht_pi_nt', 'S2_pstorerhf_pi_nt',
     'S2_pstorerit_pi_nt', 'S2_pstorerif_pi_nt', 'S2_pstorerdt_pi_nt',
-    'S2_pstorerdf_pi_nt', 'Y2_dcfetchbo_nt'
+    'S2_pstorerdf_pi_nt', 'Y2_dcfetchbo_nt',
+    # Shifts by a register amount, which shift the other way when the amount
+    # is negative, and register-amount bit operations.
+    'S2_asl_r_r', 'S2_asl_r_r_acc', 'S2_asl_r_r_nac', 'S2_asl_r_r_and',
+    'S2_asl_r_r_or', 'S2_asl_r_p', 'S2_asl_r_p_acc', 'S2_asl_r_p_nac',
+    'S2_asl_r_p_and', 'S2_asl_r_p_or', 'S2_asl_r_p_xor', 'S2_asr_r_r',
+    'S2_asr_r_r_acc', 'S2_asr_r_r_nac', 'S2_asr_r_r_and', 'S2_asr_r_r_or',
+    'S2_asr_r_p', 'S2_asr_r_p_acc', 'S2_asr_r_p_nac', 'S2_asr_r_p_and',
+    'S2_asr_r_p_or', 'S2_asr_r_p_xor', 'S2_lsl_r_r', 'S2_lsl_r_r_acc',
+    'S2_lsl_r_r_nac', 'S2_lsl_r_r_and', 'S2_lsl_r_r_or', 'S2_lsl_r_p',
+    'S2_lsl_r_p_acc', 'S2_lsl_r_p_nac', 'S2_lsl_r_p_and', 'S2_lsl_r_p_or',
+    'S2_lsl_r_p_xor', 'S2_lsr_r_r', 'S2_lsr_r_r_acc', 'S2_lsr_r_r_nac',
+    'S2_lsr_r_r_and', 'S2_lsr_r_r_or', 'S2_lsr_r_p', 'S2_lsr_r_p_acc',
+    'S2_lsr_r_p_nac', 'S2_lsr_r_p_and', 'S2_lsr_r_p_or', 'S2_lsr_r_p_xor',
+    'S2_setbit_r', 'S2_clrbit_r', 'S2_togglebit_r', 'S2_tstbit_r',
+    'S4_ntstbit_r', 'S4_lsli', 'S2_asr_i_r_rnd', 'A2_sxtw', 'C2_any8'
 ]

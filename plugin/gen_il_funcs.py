@@ -149,6 +149,9 @@ STRINGCON: ESCAPED_STRING
 %ignore WS
 """
 
+# The semantics' temporaries (tmp, width, offset, shamt), as 8-byte temps.
+TEMP_REGS = ('TMP_REG', 'WIDTH_REG', 'OFFSET_REG', 'SHAMT_REG')
+
 BINOP_TERMINALS = ('BITOR', 'BITXOR', 'BITAND', 'SHIFTOP', 'ADDOP', 'MULOP')
 
 semantics_parser = Lark(
@@ -1781,6 +1784,19 @@ class SemanticsTreeTransformer(Transformer):
       ])
     lvalue = self.lift_operand(lvalue)
     assert (isinstance(lvalue, IlRegister))
+    if (lvalue.reg in TEMP_REGS and rvalue.size < lvalue.size and
+        not isinstance(rvalue, IlConst)):
+      # The semantics' temporaries are 8-byte temps (their declared types are
+      # hidden), so a narrower value is extended as its type says. Immediates
+      # are already C++ ints of the right sign.
+      if rvalue.signed:
+        rvalue = IlSignExtend(lvalue.size, rvalue)
+      else:
+        rvalue = IlZeroExtend(lvalue.size, rvalue)
+    if lvalue.size >= 4:
+      # A wider value (a 32-bit shift done in 64 bits) is truncated.
+      # Predicates take comparisons, whose size is that of their operands.
+      rvalue = fit_to_size(lvalue.size, rvalue)
     return [IlSetRegister(lvalue.size, lvalue.reg, rvalue)]
 
   # ?unary_e: "-" unary_e -> neg_expr
@@ -2129,8 +2145,12 @@ def preprocess_semantics(tag):
 
   # zero/sign extend.
   cpreprocessor.define('fZXTN(N, M, VAL) ((VAL) & ((1<<(N))-1))')
-  cpreprocessor.define(
-      'fSXTN(N, M, VAL) ((fZXTN(N,M,VAL) ^ (1<<((N)-1))) - (1<<((N)-1)))')
+  # The sign-extended value is signed at its width M (32 or 64); without the
+  # cast it took the zero-extended mask's unsigned type.
+  cpreprocessor.define('fSXTN_CAST32(A) fCAST4s(A)')
+  cpreprocessor.define('fSXTN_CAST64(A) fCAST8s(A)')
+  cpreprocessor.define('fSXTN(N, M, VAL) fSXTN_CAST##M('
+                       '((fZXTN(N,M,VAL) ^ (1<<((N)-1))) - (1<<((N)-1))))')
 
   # Special branch macros.
   cpreprocessor.define('fCALL(A) { fBRANCH(A, COF_TYPE_CALL); }')
@@ -2161,6 +2181,28 @@ def preprocess_semantics(tag):
       'fLSHIFTR(SRC, SHAMT, REGSTYPE) (fCAST##REGSTYPE##u(SRC) >> (SHAMT))')
   cpreprocessor.define(
       'fROTL(SRC, SHAMT, REGSTYPE) (fROTL##REGSTYPE##u(SRC, SHAMT))')
+  cpreprocessor.define('fCAST4_8s(A) fCAST8s(fCAST4s(A))')
+  cpreprocessor.define('fCAST4_8u(A) fCAST8u(fCAST4u(A))')
+
+  # Shifts by a register amount, as in QEMU's macros.h: a negative amount
+  # shifts the other way. 32-bit registers shift as 64-bit values
+  # (REGSTYPE 4_8), so amounts from 32 to 63 give QEMU's results.
+  cpreprocessor.define(
+      'fBIDIR_SHIFTL(SRC, SHAMT, REGSTYPE) (((SHAMT) < 0) ? '
+      '((fCAST##REGSTYPE(SRC) >> ((-(SHAMT)) - 1)) >> 1) : '
+      '(fCAST##REGSTYPE(SRC) << (SHAMT)))')
+  cpreprocessor.define(
+      'fBIDIR_SHIFTR(SRC, SHAMT, REGSTYPE) (((SHAMT) < 0) ? '
+      '((fCAST##REGSTYPE(SRC) << ((-(SHAMT)) - 1)) << 1) : '
+      '(fCAST##REGSTYPE(SRC) >> (SHAMT)))')
+  cpreprocessor.define('fBIDIR_ASHIFTL(SRC, SHAMT, REGSTYPE) '
+                       'fBIDIR_SHIFTL(SRC, SHAMT, REGSTYPE##s)')
+  cpreprocessor.define('fBIDIR_LSHIFTL(SRC, SHAMT, REGSTYPE) '
+                       'fBIDIR_SHIFTL(SRC, SHAMT, REGSTYPE##u)')
+  cpreprocessor.define('fBIDIR_ASHIFTR(SRC, SHAMT, REGSTYPE) '
+                       'fBIDIR_SHIFTR(SRC, SHAMT, REGSTYPE##s)')
+  cpreprocessor.define('fBIDIR_LSHIFTR(SRC, SHAMT, REGSTYPE) '
+                       'fBIDIR_SHIFTR(SRC, SHAMT, REGSTYPE##u)')
 
   # Multiply operations.
   cpreprocessor.define('fSE32_64(A) (fCAST8s(fCAST4s(A)))')

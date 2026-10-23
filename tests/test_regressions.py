@@ -306,24 +306,24 @@ class TestIntrinsics(SnippetTest):
   def test_unlifted_op_does_not_end_the_il(self):
     f = self.analyse('''
 f:
-  { r0 = asl(r1, r2) }
+  { r0 = add(r1, r2):sat }
   { r0 = add(r0, #3) }
   { jumpr r31 }
 ''')['f']
     self.assertEqual(hexasm.hlil(f), '''
-return S2_asl_r_r(arg2, arg3) + 3''')
+return A2_addsat(arg2, arg3) + 3''')
 
   def test_pair_output_is_eight_bytes(self):
     f = self.analyse('''
 f:
-  { r1:0 = sxtw(r2) }
+  { r1:0 = vsxthw(r2) }
   { memd(r29+#8) = r1:0 }
   { jumpr r31 }
 ''')['f']
     il = hexasm.llil(f)
-    self.assertIn('0: temp#0 = A2_sxtw(R2)', il)
+    self.assertIn('0: temp#0 = S2_vsxthw(R2)', il)
     self.assertIn('1: R1:R0 = temp#0.q', il)
-    self.assertIn('int64_t arg_8 = A2_sxtw(arg3)', hexasm.hlil(f))
+    self.assertIn('int64_t arg_8 = S2_vsxthw(arg3)', hexasm.hlil(f))
 
   def test_load_after_unlifted_store_is_not_folded(self):
     # dczeroa is a memory intrinsic, so the earlier store's value does not
@@ -500,6 +500,224 @@ f:
 ''')['f']
     self.assertIn('temp#0.d = R1 - R2 + 5', hexasm.llil(f))
     self.assertIn('return arg2 - arg3 + 5', hexasm.hlil(f))
+
+
+def _sx(value, bits):
+  value &= (1 << bits) - 1
+  return value - (1 << bits) if value >> (bits - 1) else value
+
+
+def _bidir_shift(value, amount, bits, left, arith):
+  """QEMU's fBIDIR_{A,L}SHIFT{L,R}: a negative amount shifts the other way.
+  32-bit registers shift as 64-bit values."""
+  value = _sx(value, bits) if arith else value & ((1 << bits) - 1)
+  amount = _sx(amount, 7)
+  if amount < 0:
+    left, amount = not left, -amount
+  result = value << amount if left else value >> amount
+  return result & ((1 << 64) - 1)
+
+
+def _eval_hlil(expr):
+  """Evaluates a 64-bit HLIL constant expression: Binary Ninja does not fold
+  values written to register pairs. Fails on anything unexpected."""
+  tokens = re.findall(r'0x[0-9a-f]+|\d+|u>>|s>>|<<|[-+&|^()]|(?:sx|zx|neg)\.q',
+                      expr)
+  if ''.join(tokens) != expr.replace(' ', ''):
+    raise ValueError('cannot evaluate ' + expr)
+  mask = (1 << 64) - 1
+  binary = {'|': (1, lambda a, b: a | b), '^': (2, lambda a, b: a ^ b),
+            '&': (3, lambda a, b: a & b),
+            '<<': (4, lambda a, b: a << b),
+            'u>>': (4, lambda a, b: a >> b),
+            's>>': (4, lambda a, b: _sx(a, 64) >> b),
+            '+': (5, lambda a, b: a + b), '-': (5, lambda a, b: a - b)}
+  pos = 0
+
+  def unary():
+    nonlocal pos
+    token = tokens[pos]
+    pos += 1
+    if token == '-':
+      return -unary() & mask
+    if token in ('sx.q', 'zx.q', 'neg.q', '('):
+      if token != '(':
+        assert tokens[pos] == '('
+        pos += 1
+      value = parse(0)
+      assert tokens[pos] == ')'
+      pos += 1
+      return -value & mask if token == 'neg.q' else value
+    return int(token, 0) & mask
+
+  def parse(level):
+    nonlocal pos
+    value = unary()
+    while pos < len(tokens) and tokens[pos] in binary:
+      prec, fn = binary[tokens[pos]]
+      if prec <= level:
+        break
+      pos += 1
+      value = fn(value, parse(prec)) & mask
+    return value
+
+  value = parse(0)
+  if pos != len(tokens):
+    raise ValueError('cannot evaluate ' + expr)
+  return value
+
+
+class TestRegisterShifts(SnippetTest):
+  # Phase 4: shifts by a register amount, which shift the other way when the
+  # amount is negative, were intrinsics. The results are checked through
+  # Binary Ninja's constant folding against QEMU's macros.
+
+  RS, RSS = 0x87654321, 0x8000000112345678
+  RX, RXX = 0x11111111, 0x0123456711111111
+  OPS = {'asl': (True, True), 'asr': (False, True), 'lsl': (True, False),
+         'lsr': (False, False)}
+  ACCS = {'': lambda x, v: v, '+': lambda x, v: x + v, '-': lambda x, v: x - v,
+          '&': lambda x, v: x & v, '|': lambda x, v: x | v,
+          '^': lambda x, v: x ^ v}
+
+  def cases(self):
+    """(label, instruction, register to return, expected value)."""
+    cases = []
+    for op, (left, arith) in self.OPS.items():
+      for amount in (4, -4, 0, 33, -33):
+        value = _bidir_shift(self.RS, amount, 32, left, arith)
+        cases.append(('{}_r_{}'.format(op, amount & 0x7f),
+                      'r6 = {}(r2, r3)'.format(op), amount, 'r6', value))
+      for amount in (4, -4, 63, -64):
+        if op == 'asl' and amount == -64:
+          # test_arithmetic_shift_right_by_64.
+          continue
+        value = _bidir_shift(self.RSS, amount, 64, left, arith)
+        for half, reg in ((0, 'r6'), (32, 'r7')):
+          cases.append(('{}_p_{}_{}'.format(op, amount & 0x7f, reg),
+                        'r7:6 = {}(r5:4, r3)'.format(op), amount, reg,
+                        value >> half))
+      for acc, fn in self.ACCS.items():
+        if not acc:
+          continue
+        if acc != '^':
+          value = fn(self.RX, _bidir_shift(self.RS, -4, 32, left, arith))
+          cases.append(('{}_r_acc{}'.format(op, ord(acc)),
+                        'r6 {}= {}(r2, r3)'.format(acc, op), -4, 'r6',
+                        value))
+        value = fn(self.RXX, _bidir_shift(self.RSS, -4, 64, left, arith))
+        for half, reg in ((0, 'r6'), (32, 'r7')):
+          cases.append(('{}_p_acc{}_{}'.format(op, ord(acc), reg),
+                        'r7:6 {}= {}(r5:4, r3)'.format(acc, op), -4, reg,
+                        value >> half))
+    return cases
+
+  @staticmethod
+  def returned_value(hlil):
+    """The constant a function returns, from its HLIL, or the HLIL."""
+    m = re.search(r'return (-?(?:0x[0-9a-f]+|\d+))\s*$', hlil)
+    if m:
+      return int(m.group(1), 0) & 0xffffffff
+    # A register pair's value stays an expression: `hi:lo = ...`.
+    pair = re.search(r'^(\w+):(\w+) = (.+)$', hlil, re.M)
+    ret = re.search(r'return (\w+)\s*$', hlil)
+    if pair and ret and ret.group(1) in pair.group(1, 2):
+      value = _eval_hlil(pair.group(3))
+      if ret.group(1) == pair.group(1):
+        value >>= 32
+      return value & 0xffffffff
+    return hlil
+
+  def test_values(self):
+    cases = self.cases()
+    source = ''
+    for label, insn, amount, reg, _ in cases:
+      source += '''
+{}:
+  {{ r2 = ##0x{:x} }}
+  {{ r3 = #{} }}
+  {{ r4 = ##0x{:x} }}
+  {{ r5 = ##0x{:x} }}
+  {{ r6 = ##0x{:x} }}
+  {{ r7 = ##0x{:x} }}
+  {{ {} }}
+  {{ r0 = {} }}
+  {{ jumpr r31 }}
+'''.format(label, self.RS, amount, self.RSS & 0xffffffff, self.RSS >> 32,
+           self.RX if insn.startswith('r6') else self.RXX & 0xffffffff,
+           self.RXX >> 32, insn, reg)
+    funcs = self.analyse(source)
+    failures = []
+    for label, insn, amount, reg, expected in cases:
+      got = self.returned_value(hexasm.hlil(funcs[label]))
+      if got != expected & 0xffffffff:
+        failures.append('{} with {}: {} != {:#x}'.format(
+            insn, amount, got if isinstance(got, str) else hex(got),
+            expected & 0xffffffff))
+    self.assertEqual(failures, [])
+    self.assertGreater(len(cases), 100)
+
+
+  def test_other_values(self):
+    rs = self.RS
+    bit = lambda n: _bidir_shift(1, n, 32, True, False)
+    cases = []  # (setup, instruction, result register, expected)
+    for n in (5, 31, 32, -1):
+      setup = '{{ r2 = ##0x{:x} }}\n  {{ r3 = #{} }}'.format(rs, n)
+      cases += [
+          (setup, 'r6 = setbit(r2, r3)', 'r6', rs | bit(n)),
+          (setup, 'r6 = clrbit(r2, r3)', 'r6', rs & ~bit(n)),
+          (setup, 'r6 = togglebit(r2, r3)', 'r6', rs ^ bit(n)),
+          # Predicates are checked for truth: the lifter writes compare
+          # results as 1, where the hardware writes 0xff.
+          (setup + '\n  { p0 = tstbit(r2, r3) }', 'r6 = p0', 'r6',
+           rs & bit(n) != 0),
+          (setup + '\n  { p0 = !tstbit(r2, r3) }', 'r6 = p0', 'r6',
+           rs & bit(n) == 0),
+      ]
+    for n in (4, -1):
+      cases.append(('{{ r3 = #{} }}'.format(n), 'r6 = lsl(#-3, r3)', 'r6',
+                    _bidir_shift(-3, n, 32, True, False)))
+    for u in (0, 4, 31):
+      cases.append(('{{ r2 = ##0x{:x} }}'.format(rs),
+                    'r6 = asr(r2, #{}):rnd'.format(u), 'r6',
+                    ((_sx(rs, 32) >> u) + 1) >> 1))
+    for half, reg in ((0, 'r6'), (32, 'r7')):
+      cases.append(('{{ r2 = ##0x{:x} }}'.format(rs), 'r7:6 = sxtw(r2)', reg,
+                    _sx(rs, 32) >> half))
+    for p in (0, 0x10):
+      cases.append(('{{ r3 = #{} }}\n  {{ p1 = r3 }}\n  {{ p0 = any8(p1) }}'.format(p),
+                    'r6 = p0', 'r6', p != 0))
+    source = ''
+    for i, (setup, insn, reg, _) in enumerate(cases):
+      source += '\nf{}:\n  {}\n  {{ {} }}\n  {{ r0 = {} }}\n  {{ jumpr r31 }}\n'.format(
+          i, setup, insn, reg)
+    funcs = self.analyse(source)
+    failures = []
+    for i, (setup, insn, reg, expected) in enumerate(cases):
+      got = self.returned_value(hexasm.hlil(funcs['f{}'.format(i)]))
+      if isinstance(expected, bool):
+        ok = isinstance(got, int) and bool(got) == expected
+      else:
+        ok = got == expected & 0xffffffff
+      if not ok:
+        failures.append('{} after {}: {} != {}'.format(
+            insn, setup.replace('\n  ', ' '), got, expected))
+    self.assertEqual(failures, [])
+
+  def test_arithmetic_shift_right_by_64(self):
+    # asl by -64 shifts right by 64, as (x s>> 63) s>> 1. Binary Ninja 6.1
+    # folds two constant arithmetic shifts into one shift by their sum and
+    # takes 64 as 0, so its HLIL shows x unchanged; two immediate asr
+    # instructions show the same. The lifted IL is right.
+    f = self.analyse('''
+f:
+  { r3 = #-64 }
+  { r7:6 = asl(r5:4, r3) }
+  { jumpr r31 }
+''')['f']
+    il = hexasm.llil(f)
+    self.assertRegex(il, r'temp#\d+\.q s>> \(neg\.q\(temp#\d+\.q\) - 1\) s>> 1')
 
 
 class TestCallingConvention(SnippetTest):

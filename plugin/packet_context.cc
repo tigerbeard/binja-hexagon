@@ -119,6 +119,15 @@ int PacketContext::AddDestReg(bool rw, int size, int reg) {
   auto it = regs_.find(key);
   if (it == regs_.end()) {
     it = regs_.emplace(key, MakeTempReg(rw, size, reg, subspace, il_)).first;
+    dest_temps_[key] = {insn_num_, rw};
+  } else if (rw && !dest_temps_[key].holds_old_value &&
+             dest_temps_[key].insn_num == insn_num_) {
+    // One instruction names the register as a write-only destination and a
+    // read-write one (Rd = memw(Rx++#s4) with Rd and Rx the same). Its
+    // operands are declared before its semantics, so the old value can
+    // still be copied in.
+    it->second->CopyToTemp(il_);
+    dest_temps_[key].holds_old_value = true;
   }
   return it->second->Reg();
 }

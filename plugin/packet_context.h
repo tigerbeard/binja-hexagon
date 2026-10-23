@@ -224,6 +224,13 @@ private:
   // predicate temp.
   int insn_num_ = 0;
   std::map<int, int> predicate_writers_;
+  // The instruction that declared each destination temp, by its key in
+  // regs_, and whether the temp started from the register's old value.
+  struct DestTemp {
+    int insn_num;
+    bool holds_old_value;
+  };
+  std::map<int, DestTemp> dest_temps_;
   struct BranchCondition {
     std::function<BinaryNinja::ExprId()> build;
     std::vector<int> reads;

@@ -465,6 +465,27 @@ f:
     self.assertGreaterEqual(len(words), 119)
     self.assertEqual(llvm_diff.compare(binja, words), [])
 
+  def test_decodes_deprecated_encodings(self):
+    # QEMU's legacy encodings, which the V79 PRM lists as :deprecated and
+    # LLVM decodes from V5 to V81.
+    f = self.analyse('''
+f:
+  .word 0xd597cc03
+  .word 0xd59ad785
+  .word 0xd405d218
+  { jumpr r31 }
+''')['f']
+    self.assertEqual(
+        hexasm.disasm(binja, f), '''
+{ R3 = add(R23,R12):sat:deprecated }
+{ R5 = sub(R23,R26):sat:deprecated }
+{ R25:24 = packhl(R5,R18):deprecated }
+{ jumpr LR }''')
+    import llvm_diff
+    words = [w for tag, w in llvm_diff.pattern_words(r'_deprecated$')]
+    self.assertEqual(len(words), 3)
+    self.assertEqual(llvm_diff.compare(binja, words), [])
+
 
 class TestCallingConvention(SnippetTest):
   # #5: arguments R0-R8, no caller-saved registers, only FP and LR

@@ -2386,7 +2386,12 @@ using namespace BinaryNinja;
 
 ''')
 
-  for tag in SUPPORTED_TAGS:
+  # A legacy encoding's instruction, TAG_deprecated, lifts like TAG.
+  supported_tags = SUPPORTED_TAGS + [
+      tag for tag in tags if tag.endswith('_deprecated') and
+      tag[:-len('_deprecated')] in SUPPORTED_TAGS
+  ]
+  for tag in supported_tags:
     f.write('''/*\n{0}:\n{1}\n{2}\n*/\n'''.format(tag, behdict[tag],
                                                   semdict[tag]))
     f.write('''void lift_{0}(Architecture *arch,
@@ -2399,7 +2404,7 @@ using namespace BinaryNinja;
     f.write(gen_il_func(tag, tagregs[tag], tagimms[tag]))
     f.write('}\n\n')
 
-  supported_set = set(SUPPORTED_TAGS)
+  supported_set = set(supported_tags)
   intrinsic_tags = [tag for tag in tags if tag not in supported_set]
   for tag in intrinsic_tags:
     f.write('''/*\n{0}: {1} (intrinsic)\n*/\n'''.format(tag, behdict[tag]))

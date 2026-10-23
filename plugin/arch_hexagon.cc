@@ -17,7 +17,6 @@
 #include "absl/strings/str_format.h"
 #include "absl/types/span.h"
 #include "binaryninjaapi.h"
-#include "glog/logging.h"
 #include "lowlevelilinstruction.h"
 #include "plugin/hex_regs.h"
 #include "plugin/hw_loops.h"
@@ -171,7 +170,7 @@ public:
     }
     auto status = FillBnInstructionInfo(addr, *pkt, result);
     if (!status.ok()) {
-      LOG(WARNING) << "FillBnInstructionInfo failed " << status;
+      LogWarn("FillBnInstructionInfo failed: %s", status.ToString().c_str());
       return false;
     }
     return true;
@@ -185,7 +184,8 @@ public:
     }
     auto status = FillBnInstructionTextTokens(addr, *pkt, result);
     if (!status.ok()) {
-      LOG(WARNING) << "FillBnInstructionTextTokens failed " << status;
+      LogWarn("FillBnInstructionTextTokens failed: %s",
+              status.ToString().c_str());
       return false;
     }
     len = pkt->encod_pkt_size_in_bytes;
@@ -200,7 +200,8 @@ public:
     }
     auto status = FillBnInstructionLowLevelIL(this, addr, *pkt, il);
     if (!status.ok()) {
-      LOG(WARNING) << "FillBnInstructionLowLevelIL failed " << status;
+      LogWarn("FillBnInstructionLowLevelIL failed: %s",
+              status.ToString().c_str());
       return false;
     }
     len = pkt->encod_pkt_size_in_bytes;
@@ -270,7 +271,7 @@ public:
 
   std::string GetFlagName(uint32_t flag) override {
     // The architecture defines no flags.
-    LOG(ERROR) << "Unexpected GetFlagName for flag " << flag;
+    LogError("Unexpected GetFlagName for flag %u", flag);
     return "";
   }
 
@@ -301,7 +302,7 @@ public:
     case HEX_REG_C00 ... HEX_REG_C31:
       return BNRegisterInfo{reg, 0, 4, NoExtend};
     default:
-      LOG(ERROR) << "Unexpected GetRegisterInfo for reg " << reg;
+      LogError("Unexpected GetRegisterInfo for reg %u", reg);
     }
     return BNRegisterInfo{reg, 0, 4, NoExtend};
   }

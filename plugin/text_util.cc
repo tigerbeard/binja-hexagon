@@ -18,7 +18,7 @@
 #include "plugin/text_util.h"
 
 #include "absl/strings/str_cat.h"
-#include "glog/logging.h"
+#include "binaryninjaapi.h"
 #include "plugin/hex_regs.h"
 
 namespace {
@@ -34,7 +34,7 @@ std::string GeneralRegisterName(uint32_t reg) {
   case HEX_REG_LR: // R31
     return "LR";
   default:
-    LOG(ERROR) << "Unexpected general register reg " << reg;
+    BinaryNinja::LogError("Unexpected general register reg %u", reg);
   }
   return absl::StrCat("R", reg - HEX_REG_R00);
 }
@@ -88,7 +88,7 @@ std::string ControlRegisterName(uint32_t reg) {
   case HEX_REG_C20 ... HEX_REG_C29: // Reserved.
     return absl::StrCat("C", reg - HEX_REG_C00);
   default:
-    LOG(ERROR) << "Unexpected control register reg " << reg;
+    BinaryNinja::LogError("Unexpected control register reg %u", reg);
   }
   return absl::StrCat("C", reg - HEX_REG_C00);
 }
@@ -104,7 +104,7 @@ std::string PredicateRegisterName(uint32_t reg) {
   case HEX_REG_P3:
     return "P3";
   default:
-    LOG(ERROR) << "Unexpected predicate register reg " << reg;
+    BinaryNinja::LogError("Unexpected predicate register reg %u", reg);
   }
   return absl::StrCat("P", reg - HEX_REG_P0);
 }
@@ -318,7 +318,7 @@ std::string GetArchRegisterName(uint32_t reg) {
   case HEX_REG_USR_LPCFG: // Subreg of HEX_REG_USR
     return "LPCFG";
   default:
-    LOG(ERROR) << "Unexpected GetRegisterName for reg " << reg;
+    BinaryNinja::LogError("Unexpected GetRegisterName for reg %u", reg);
   }
   return "??";
 }

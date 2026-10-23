@@ -73,41 +73,12 @@ enable_testing()
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
 
 #
-# Build gflags at configure time.
-#
-configure_file(third_party/gflags_CMakeLists.txt.in
-               gflags-build/CMakeLists.txt)
-execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}"
-    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-    -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-    -DCMAKE_OSX_SYSROOT=${CMAKE_OSX_SYSROOT}
-    .
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/gflags-build
-  RESULT_VARIABLE gflags_configure_result)
-if(NOT gflags_configure_result EQUAL 0)
-  message(FATAL_ERROR "Configuring gflags failed: ${gflags_configure_result}")
-endif()
-execute_process(COMMAND ${CMAKE_COMMAND} --build .
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/gflags-build
-  RESULT_VARIABLE gflags_build_result)
-if(NOT gflags_build_result EQUAL 0)
-  message(FATAL_ERROR "Building gflags failed: ${gflags_build_result}")
-endif()
-
-list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
-find_package(gflags REQUIRED)
-
-#
 # third_party dependencies.
 #
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(WITH_UNWIND OFF CACHE BOOL "" FORCE)
 set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
 set(ABSL_PROPAGATE_CXX_STD ON CACHE BOOL "" FORCE)
 SET(HEADLESS ON)
-add_subdirectory(third_party/glog EXCLUDE_FROM_ALL)
 add_subdirectory(third_party/googletest EXCLUDE_FROM_ALL)
 add_subdirectory(third_party/abseil-cpp EXCLUDE_FROM_ALL)
 add_subdirectory(third_party/binaryninja-api EXCLUDE_FROM_ALL)

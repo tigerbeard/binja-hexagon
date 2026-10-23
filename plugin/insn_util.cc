@@ -20,7 +20,6 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
-#include "glog/logging.h"
 #include "plugin/hex_regs.h"
 #include "plugin/hw_loops.h"
 #include "plugin/status_macros.h"

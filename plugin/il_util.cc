@@ -19,7 +19,6 @@
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
 #include "binaryninjaapi.h"
-#include "glog/logging.h"
 #include "plugin/hex_regs.h"
 #include "plugin/hw_loops.h"
 #include "plugin/insn_util.h"
@@ -48,10 +47,8 @@ absl::Status FillBnInstructionLowLevelImpl(Architecture *arch, uint64_t pc,
     // Every opcode has a lifter (most unlifted ones are intrinsics), so this
     // is unexpected. Unimplemented, unlike Undefined, does not end the IL.
     il.AddInstruction(il.Unimplemented());
-#ifndef NDEBUG
-    LOG(INFO) << "Unsupported lifter for '" << opcode_names[insn.opcode]
-              << "' at " << std::hex << "0x" << pc;
-#endif
+    LogWarn("No lifter for %s at 0x%llx", opcode_names[insn.opcode],
+            static_cast<unsigned long long>(pc));
     return absl::OkStatus();
   }
   opcode_liftptr[insn.opcode](arch, pc, pkt, insn, insn_num, ctx);

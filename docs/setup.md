@@ -14,8 +14,8 @@ Download the plugin's third party repositories. Binary Ninja's API needs only
 its `vendor/fmt` submodule; its other submodules are large and unused here:
 
 ```
-$ git submodule update --init third_party/abseil-cpp third_party/gflags \
-    third_party/glog third_party/googletest third_party/binaryninja-api
+$ git submodule update --init third_party/abseil-cpp third_party/googletest \
+    third_party/binaryninja-api
 $ git -C third_party/binaryninja-api submodule update --init vendor/fmt
 ```
 
@@ -43,7 +43,7 @@ The build accepts the following variables, set using `cmake -D`:
   Used to find the Python API for the tests and the core library at run time.
 
 - **CMAKE_POLICY_VERSION_MINIMUM**: needed with CMake 4, because the pinned
-  gflags, glog and googletest declare CMake versions older than 3.5.
+  googletest declares a CMake version older than 3.5.
 
 - **Python3_EXECUTABLE**: the interpreter from the `venv` above.
 

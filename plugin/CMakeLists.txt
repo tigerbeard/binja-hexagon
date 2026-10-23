@@ -93,7 +93,6 @@ target_link_libraries(plugin_lib
   absl::str_format
   absl::statusor
   absl::synchronization
-  glog
 )
 
 target_include_directories(plugin_lib

@@ -63,7 +63,16 @@ constexpr int kBranchDestBase = kFixedTempBase + kNumScratchTemps;
 constexpr int kBranchTakenBase = kBranchDestBase + INSTRUCTIONS_MAX;
 #define BRANCH_TAKEN_ARRAY LLIL_TEMP(kBranchTakenBase)
 
-constexpr int kNumTemps = kBranchTakenBase + INSTRUCTIONS_MAX;
+// Local variables of the generated lifters (declared in fHIDE), by size:
+// LOCAL1_REG + k is the k-th one-byte local, and so on for 2, 4 and 8 bytes.
+constexpr int kLocalTempBase = kBranchTakenBase + INSTRUCTIONS_MAX;
+constexpr int kLocalTempsPerSize = 8;
+#define LOCAL1_REG LLIL_TEMP(kLocalTempBase + 0 * kLocalTempsPerSize)
+#define LOCAL2_REG LLIL_TEMP(kLocalTempBase + 1 * kLocalTempsPerSize)
+#define LOCAL4_REG LLIL_TEMP(kLocalTempBase + 2 * kLocalTempsPerSize)
+#define LOCAL8_REG LLIL_TEMP(kLocalTempBase + 3 * kLocalTempsPerSize)
+
+constexpr int kNumTemps = kLocalTempBase + 4 * kLocalTempsPerSize;
 
 static_assert(HEX_REG_USR_LPCFG < NUM_HEX_REGS,
               "every HEX_REG must fit in one temp subspace");

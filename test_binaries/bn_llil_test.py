@@ -678,8 +678,8 @@ R1.L = #0x22 }
 0: temp1.d = R1
 1: temp104.q = 1
 2: temp105.q = 6
-3: temp1.d = temp1.d & not.q(((1 << temp104.q) - 1) << temp105.q)
-4: temp1.d = temp1.d | (sx.q(R0) & ((1 << temp104.q) - 1)) << temp105.q
+3: temp1.d = (sx.q(temp1.d) & not.q(((1 << temp104.q) - 1) << temp105.q)).d
+4: temp1.d = (sx.q(temp1.d) | (sx.q(R0) & ((1 << temp104.q) - 1)) << temp105.q).d
 5: R1 = temp1.d
 6: temp200.d = LR
 7: <return> jump(LR)''')
@@ -766,8 +766,8 @@ R1 = memw(0+##0x123450) }
 0: temp0.d = 1
 1: R0 = temp0.d
 2: temp202.q = 0
-3: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | (R0 & 0xffffffff) << 0
-4: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | 0 << 0x20
+3: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | zx.q(R0) << 0
+4: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | zx.q(0) << 0x20
 5: R3:R2 = temp202.q
 6: temp305.d = LR
 7: <return> jump(LR)''')
@@ -784,8 +784,8 @@ R1 = memw(0+##0x123450) }
 0: temp0.d = 1
 1: R0 = temp0.d
 2: temp202.q = 0
-3: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | 0 << 0
-4: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | (R0 & 0xffffffff) << 0x20
+3: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | zx.q(0) << 0
+4: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | zx.q(R0) << 0x20
 5: R3:R2 = temp202.q
 6: temp305.d = LR
 7: <return> jump(LR)''')
@@ -800,8 +800,8 @@ R3:2 = combine(#0x1,##0x30400) }
     self.assertEqual(
         self.list_llil(func), '''
 0: temp202.q = 0
-1: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | (0x30400 & 0xffffffff) << 0
-2: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | (1 & 0xffffffff) << 0x20
+1: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | zx.q(0x30400) << 0
+2: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | zx.q(1) << 0x20
 3: R3:R2 = temp202.q
 4: temp305.d = LR
 5: <return> jump(LR)''')
@@ -820,8 +820,8 @@ R3:2 = combine(#0x1,##0x30400) }
 2: R0 = temp0.d
 3: R1 = temp1.d
 4: temp202.q = 0
-5: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | (R1 & 0xffffffff) << 0
-6: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | (R0 & 0xffffffff) << 0x20
+5: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | zx.q(R1) << 0
+6: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | zx.q(R0) << 0x20
 7: R3:R2 = temp202.q
 8: temp305.d = LR
 9: <return> jump(LR)''')
@@ -863,8 +863,8 @@ memd(SP+#-0x10) = R17:16; allocframe(#0x18) }
     self.assertEqual(
         self.list_llil(func), '''
 0: temp216.q = 0
-1: temp216.q = (temp216.q & not.q(0xffffffff << 0)) | (R1 & 0xffffffff) << 0
-2: temp216.q = (temp216.q & not.q(0xffffffff << 0x20)) | (R0 & 0xffffffff) << 0x20
+1: temp216.q = (temp216.q & not.q(0xffffffff << 0)) | zx.q(R1) << 0
+2: temp216.q = (temp216.q & not.q(0xffffffff << 0x20)) | zx.q(R0) << 0x20
 3: temp116.q = R17:R16
 4: temp300.d = SP - 0x10
 5: [temp300.d {var_10}].q = temp116.q

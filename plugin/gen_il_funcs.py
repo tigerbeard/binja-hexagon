@@ -89,6 +89,7 @@ fbody: stmt* -> fbody
       | mul_e MULOP unary_e -> expr_binop
 
 ?unary_e: primary_e
+        | "(" CTYPE ")" unary_e -> cast_expr
         | "-" unary_e -> neg_expr
         | "!" unary_e -> not_expr
         | "~" unary_e -> bit_not_expr
@@ -118,6 +119,7 @@ ADDOP.1: "+" | "-"
 MULOP.1: "*" | "/"
 
 ?id: REG_OLD | REG_NEW | REG_LR | IMM | MACRO | EA | SIGN | BRANCH_TYPE | TMP
+    | LOCAL
 REG_OLD: REG "V"
 REG_NEW: REG "N"
 REG: REG_TYPE REG_ID
@@ -137,6 +139,8 @@ EA: "EA"
 SIGN: "s" | "u"
 BRANCH_TYPE: /COF_TYPE_\w+/
 TMP: "tmp" | "width" | "offset" | "shamt"
+LOCAL: /local_\w+/
+CTYPE: /unsigned\s+long\s+long|unsigned\s+int|long\s+long|unsigned|int(?!\w)|size[1248][su]_t|u?int(8|16|32|64)_t/
 
 INTCON: HEX_NUMBER | DEC_NUMBER
 HEX_NUMBER: /0x[\da-f]*/i
@@ -1030,6 +1034,10 @@ class SemanticsTreeTransformer(Transformer):
       op = IlRegister(4, 'HEX_REG_LR')
     elif op.type in ['IMM', 'INTCON']:
       op = IlConst(4, op)
+    elif op.type == 'LOCAL':
+      reg, size, signed = LOCALS[self.tag][op.value]
+      op = IlRegister(size, reg)
+      op.signed = signed
     elif op.type == 'TMP':
       if op.value == 'tmp':
         op = IlRegister(8, 'TMP_REG')
@@ -1216,8 +1224,8 @@ class SemanticsTreeTransformer(Transformer):
     #         WRITE_RREG(HEX_REG_SA1, START); \
     #     } while (0)
     assert (len(args) == 3)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
+    n = fold_constant(args[0])
+    assert (n is not None)
     start, count = list(map(self.lift_operand, args[1:]))
     ret = []
     if n == 0:
@@ -1245,8 +1253,8 @@ class SemanticsTreeTransformer(Transformer):
     # #define fWRITE_LC0(VAL) WRITE_RREG(HEX_REG_LC0, VAL)
     # #define fWRITE_LC1(VAL) WRITE_RREG(HEX_REG_LC1, VAL)
     assert (len(args) == 2)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
+    n = fold_constant(args[0])
+    assert (n is not None)
     val = self.lift_operand(args[1])
     if n == 0:
       return [IlSetRegister(4, 'HEX_REG_LC0', val)]
@@ -1258,8 +1266,8 @@ class SemanticsTreeTransformer(Transformer):
     # macros.h:
     # #define fGETBYTE(N, SRC) ((int8_t)((SRC >> ((N) * 8)) & 0xff))
     assert (len(args) == 2)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
+    n = fold_constant(args[0])
+    assert (n is not None)
     src = self.lift_operand(args[1])
     src.signed = True
     if n == 0:
@@ -1270,8 +1278,8 @@ class SemanticsTreeTransformer(Transformer):
     # macros.h:
     # #define fGETBYTE(N, SRC) ((uint8_t)((SRC >> ((N) * 8)) & 0xff))
     assert (len(args) == 2)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
+    n = fold_constant(args[0])
+    assert (n is not None)
     src = self.lift_operand(args[1])
     src.signed = False
     if n == 0:
@@ -1282,22 +1290,24 @@ class SemanticsTreeTransformer(Transformer):
     # macros.h:
     # #define fGETHALF(N, SRC) ((int16_t)((SRC >> ((N) * 16)) & 0xffff))
     assert (len(args) == 2)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
+    n = fold_constant(args[0])
+    assert (n is not None)
     src = self.lift_operand(args[1])
     src.signed = True
     if n == 0:
       half = IlLowPart(2, src)
     else:
       half = IlLowPart(2, IlArithShiftRight(src.size, src, IlConst(1, n * 16)))
-    return IlSignExtend(src.size, half)
+    # An int16_t, which operators promote to int.
+    half.signed = True
+    return half
 
   def macro_expr_fGETUHALF(self, args):
     # macros.h:
     # #define fGETUHALF(N, SRC) ((uint16_t)((SRC >> ((N) * 16)) & 0xffff))
     assert (len(args) == 2)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
+    n = fold_constant(args[0])
+    assert (n is not None)
     src = self.lift_operand(args[1])
     src.signed = False
     if n == 0:
@@ -1305,15 +1315,17 @@ class SemanticsTreeTransformer(Transformer):
     else:
       half = IlLowPart(2, IlLogicalShiftRight(src.size, src, IlConst(1,
                                                                      n * 16)))
-    return IlZeroExtend(src.size, half)
+    # A uint16_t, which operators promote to (signed) int.
+    half.signed = False
+    return half
 
   def macro_expr_fGETWORD(self, args):
     # macros.h:
     # #define fGETWORD(N, SRC) \
     #     ((int64_t)((int32_t)((SRC >> ((N) * 32)) & 0x0ffffffffLL)))
     assert (len(args) == 2)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
+    n = fold_constant(args[0])
+    assert (n is not None)
     src = self.lift_operand(args[1])
     assert (src.size == 8)
     src.signed = True
@@ -1328,8 +1340,8 @@ class SemanticsTreeTransformer(Transformer):
     # #define fGETWORD(N, SRC) \
     #     ((uint64_t)((uint32_t)((SRC >> ((N) * 32)) & 0x0ffffffffLL)))
     assert (len(args) == 2)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
+    n = fold_constant(args[0])
+    assert (n is not None)
     src = self.lift_operand(args[1])
     assert (src.size == 8)
     src.signed = False
@@ -1352,47 +1364,67 @@ class SemanticsTreeTransformer(Transformer):
     assert (src.size == 8)
     return IlRotateLeft(src.size, src, shamt)
 
-  def macro_stmt_fSETHALF(self, args):
-    # macros.h:
-    # #define fSETHALF(N, DST, VAL) \
-    #     do { \
-    #         DST = (DST & ~(0x0ffffLL << ((N) * 16))) | \
-    #         (((uint64_t)((VAL) & 0x0ffff)) << ((N) * 16)); \
-    #     } while (0)
+  def lane_shift(self, n, bits):
+    # The shift of lane |n| of |bits| bits: N * BITS.
+    if fold_constant(n) is not None:
+      return IlConst(1, fold_constant(n) * bits)
+    n = self.lift_operand(n)
+    return IlMult(n.size, n, IlConst(n.size, bits))
+
+  def set_lane(self, args, bits):
+    # macros.h, for fSETBIT, fSETBYTE, fSETHALF and fSETWORD:
+    # DST = (DST & ~(MASK << ((N) * BITS))) |
+    #       (((VAL) & MASK) << ((N) * BITS))
     assert (len(args) == 3)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
     dst, val = list(map(self.lift_operand, args[1:]))
-    assert (isinstance(dst, IlRegister) and dst.size == 4)
+    assert (isinstance(dst, IlRegister) and dst.size * 8 > bits)
+    mask = (1 << bits) - 1
+    if val.size * 8 == bits:
+      # A value exactly the lane's width needs no mask (combine).
+      if literal_fits(val, val.size, False):
+        lane = widen(val, dst.size)  # A literal that fits takes the size.
+      elif val.size < dst.size:
+        lane = IlZeroExtend(dst.size, val)
+      else:
+        lane = val
+    else:
+      if val.size > dst.size:
+        val = IlLowPart(dst.size, val)
+      else:
+        val = widen(val, dst.size)  # As its type says, before the mask.
+      lane = IlAnd(dst.size, val, IlConst(dst.size, mask))
     old = IlAnd(
         dst.size, dst,
-        IlNot(dst.size,
-              IlShiftLeft(dst.size, IlConst(4, 0xffff), IlConst(1, n * 16))))
-    new = IlShiftLeft(dst.size, IlAnd(dst.size, val, IlConst(4, 0xffff)),
-                      IlConst(1, n * 16))
+        IlNot(
+            dst.size,
+            IlShiftLeft(dst.size, IlConst(dst.size, mask),
+                        self.lane_shift(args[0], bits))))
+    new = IlShiftLeft(dst.size, lane, self.lane_shift(args[0], bits))
     return [IlSetRegister(dst.size, dst.reg, IlOr(dst.size, old, new))]
+
+  def macro_stmt_fSETBIT(self, args):
+    return self.set_lane(args, 1)
+
+  def macro_stmt_fSETBYTE(self, args):
+    return self.set_lane(args, 8)
+
+  def macro_stmt_fSETHALF(self, args):
+    return self.set_lane(args, 16)
 
   def macro_stmt_fSETWORD(self, args):
-    # macros.h:
-    # #define fSETWORD(N, DST, VAL) \
-    #     do { \
-    #         DST = (DST & ~(0x0ffffffffLL << ((N) * 32))) | \
-    #               (((VAL) & 0x0ffffffffLL) << ((N) * 32)); \
-    #     } while (0)
-    assert (len(args) == 3)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
-    dst, val = list(map(self.lift_operand, args[1:]))
-    assert (isinstance(dst, IlRegister) and dst.size == 8)
-    old = IlAnd(
-        dst.size, dst,
-        IlNot(dst.size,
-              IlShiftLeft(dst.size, IlConst(4, 0xffffffff), IlConst(1,
-                                                                    n * 32))))
-    new = IlShiftLeft(dst.size, IlAnd(dst.size, val, IlConst(4, 0xffffffff)),
-                      IlConst(1, n * 32))
-    return [IlSetRegister(dst.size, dst.reg, IlOr(dst.size, old, new))]
+    return self.set_lane(args, 32)
 
+  def macro_expr_fGETBIT(self, args):
+    # macros.h:
+    # #define fGETBIT(N, SRC) (((SRC) >> N) & 1)
+    assert (len(args) == 2)
+    src = self.lift_operand(args[1])
+    value = IlAnd(
+        src.size,
+        IlLogicalShiftRight(src.size, src, self.lane_shift(args[0], 1)),
+        IlConst(src.size, 1))
+    value.signed = False
+    return value
   def macro_expr_fFRAME_SCRAMBLE(self, args):
     # This macro is always invoked with the same arguments:
     #   fFRAME_SCRAMBLE((fCAST8_8u(fREAD_LR()) << 32) | fCAST4_4u(fREAD_FP()))
@@ -1443,8 +1475,8 @@ class SemanticsTreeTransformer(Transformer):
     # #define fREAD_LC0 (READ_REG(tmp, HEX_REG_LC0))
     # #define fREAD_LC1 (READ_REG(tmp, HEX_REG_LC1))
     assert (len(args) == 1)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
+    n = fold_constant(args[0])
+    assert (n is not None)
     if n == 0:
       return IlRegister(4, 'HEX_REG_LC0')
     if n == 1:
@@ -1456,8 +1488,8 @@ class SemanticsTreeTransformer(Transformer):
     # #define fREAD_SA0 (READ_REG(tmp, HEX_REG_SA0))
     # #define fREAD_SA1 (READ_REG(tmp, HEX_REG_SA1))
     assert (len(args) == 1)
-    assert (args[0].type == 'INTCON')
-    n = int(args[0])
+    n = fold_constant(args[0])
+    assert (n is not None)
     if n == 0:
       return IlRegister(4, 'HEX_REG_SA0')
     if n == 1:
@@ -1522,7 +1554,9 @@ class SemanticsTreeTransformer(Transformer):
     # fZXTN and fSXTN: the low N bits of VAL, zero- or sign-extended to M
     # bits, as QEMU's extract64 and sextract64.
     assert (len(args) == 3 and args[1].type == 'INTCON')
-    n, m_bytes = args[0], int(args[1]) // 8
+    # QEMU's result is 64-bit whatever M is (fSXTN(32,33,..) in vavgw); M up
+    # to 32 keeps 32-bit uses at 32 bits.
+    n, m_bytes = args[0], 4 if int(args[1]) <= 32 else 8
     val = self.lift_operand(args[2])
     if getattr(n, 'type', None) == 'INTCON' and int(n) in (8, 16, 32, 64):
       # A whole byte, half or word: an extension, which reads better.
@@ -1687,7 +1721,7 @@ class SemanticsTreeTransformer(Transformer):
     # IL does not support a ternary operator. Instead compute the following:
     # int abs = (1 - 2*(a < 0)) * a;
     assert (len(args) == 1)
-    a = self.lift_operand(args[0])
+    a = int_promote(self.lift_operand(args[0]))
     if not a.signed:
       return a
 
@@ -1727,6 +1761,17 @@ class SemanticsTreeTransformer(Transformer):
   @v_args(inline=False)
   def call_stmt(self, args):
     ident = args[0]
+    for i, arg in enumerate(args[1:], 1):
+      ternary = find_ternary(arg)
+      if ternary is not None:
+        # f(E[c ? t : f]) => if (c) f(E[t]); else f(E[f]);
+        return self.if_stmt([
+            ternary.cond,
+            self.call_stmt(args[:i] + [replace_expr(arg, ternary, ternary.t)] +
+                           args[i + 1:]),
+            self.call_stmt(args[:i] + [replace_expr(arg, ternary, ternary.f)] +
+                           args[i + 1:])
+        ])
     if ident.type == 'MACRO':
       return getattr(self, 'macro_stmt_' + ident.value)(args[1:])
     assert (0)
@@ -1808,24 +1853,12 @@ class SemanticsTreeTransformer(Transformer):
   # | id ASSGOP expr ";" -> assg_binop_stmt
   @v_args(inline=True)
   def assg_binop_stmt(self, lvalue, op, rvalue):
-    lvalue = self.lift_operand(lvalue)
-    rvalue = self.lift_operand(rvalue)
-    if op == '+=':
-      # a += b => a = a + b;
-      return self.assg(lvalue, IlAdd(lvalue.size, lvalue, rvalue))
-    if op == '-=':
-      # a -= b => a = a - b;
-      return self.assg(lvalue, IlSub(lvalue.size, lvalue, rvalue))
-    if op == '&=':
-      # a &= b => a = a & b;
-      return self.assg(lvalue, IlAnd(lvalue.size, lvalue, rvalue))
-    if op == '^=':
-      # a ^= b => a = a ^ b;
-      return self.assg(lvalue, IlXor(lvalue.size, lvalue, rvalue))
-    if op == '|=':
-      # a |= b => a = a | b;
-      return self.assg(lvalue, IlOr(lvalue.size, lvalue, rvalue))
-    assert (0)
+    # a op= b => a = a op b, with the operator's conversions.
+    terminal = {'+': 'ADDOP', '-': 'ADDOP', '&': 'BITAND', '^': 'BITXOR',
+                '|': 'BITOR'}[op.value[0]]
+    return self.assg(
+        lvalue,
+        self.expr_binop(lvalue, Token(terminal, op.value[0]), rvalue))
 
   # ?assg: id "=" expr
   @v_args(inline=True)
@@ -1841,6 +1874,12 @@ class SemanticsTreeTransformer(Transformer):
       ])
     lvalue = self.lift_operand(lvalue)
     assert (isinstance(lvalue, IlRegister))
+    if lvalue.reg.startswith('LOCAL'):
+      # A local variable takes its declared type, as in C.
+      return [
+          IlSetRegister(lvalue.size, lvalue.reg,
+                        convert(rvalue, lvalue.size, lvalue.signed))
+      ]
     if (lvalue.reg in TEMP_REGS and rvalue.size < lvalue.size and
         not isinstance(rvalue, IlConst)):
       # The semantics' temporaries are 8-byte temps (their declared types are
@@ -1860,8 +1899,10 @@ class SemanticsTreeTransformer(Transformer):
   @v_args(inline=False)
   def neg_expr(self, args):
     assert (len(args) == 1)
-    val = self.lift_operand(args[0])
-    return IlNeg(val.size, val)
+    val = int_promote(self.lift_operand(args[0]))
+    result = IlNeg(val.size, val)
+    result.signed = val.signed  # The promoted operand's type, as in C.
+    return result
 
   # | "!" unary_e -> not_expr
   def not_expr(self, args):
@@ -1872,40 +1913,57 @@ class SemanticsTreeTransformer(Transformer):
   # | "~" unary_e -> bit_not_expr
   def bit_not_expr(self, args):
     assert (len(args) == 1)
+    # The low bits of ~x do not depend on promotion, so x keeps its type
+    # (and predicate logic its size); later operators promote as needed.
     val = self.lift_operand(args[0])
-    return IlNot(val.size, val)
+    result = IlNot(val.size, val)
+    result.signed = val.signed
+    return result
 
   # The arithmetic, shift and bitwise levels -> expr_binop
   @v_args(inline=True)
   def expr_binop(self, op1, binop, op2):
     assert (binop.type in BINOP_TERMINALS)
     op1, op2 = list(map(self.lift_operand, [op1, op2]))
-    if binop.value not in ('<<', '>>'):
-      # A shift has its left operand's type; other operators convert.
+    if binop.value in ('<<', '>>'):
+      # A shift has its (promoted) left operand's type.
+      op1 = int_promote(op1)
+    elif binop.value in '&|^' and op1.size == op2.size:
+      # Bitwise operators give the same low bits without promotion, which
+      # keeps predicate logic at a predicate's size.
+      pass
+    else:
       op1, op2 = promote(op1, op2)
+    result = self.binop(op1, binop.value, op2)
+    if binop.value not in ('<<', '>>'):
+      # Unsigned if either operand is, as C's usual arithmetic conversions.
+      result.signed = op1.signed and op2.signed
+    return result
 
-    if (binop.value == '+'):
+  def binop(self, op1, binop, op2):
+    # The IL for |binop| ('+', '<<', ...) on converted operands.
+    if (binop == '+'):
       return IlAdd(op1.size, op1, op2)
 
-    if (binop.value == '-'):
+    if (binop == '-'):
       return IlSub(op1.size, op1, op2)
 
-    if (binop.value == '*'):
+    if (binop == '*'):
       return IlMult(op1.size, op1, op2)
 
-    if (binop.value == '|'):
+    if (binop == '|'):
       return IlOr(op1.size, op1, op2)
 
-    if (binop.value == '&'):
+    if (binop == '&'):
       return IlAnd(op1.size, op1, op2)
 
-    if (binop.value == '^'):
+    if (binop == '^'):
       return IlXor(op1.size, op1, op2)
 
-    if (binop.value == '<<'):
+    if (binop == '<<'):
       return IlShiftLeft(op1.size, op1, op2)
 
-    if (binop.value == '>>'):
+    if (binop == '>>'):
       if op1.signed:
         return IlArithShiftRight(op1.size, op1, op2)
       else:
@@ -1918,7 +1976,12 @@ class SemanticsTreeTransformer(Transformer):
   @v_args(inline=True)
   def expr_relop(self, op1, relop, op2):
     assert (relop.type in ('EQOP', 'RELOP'))
-    op1, op2 = promote(*map(self.lift_operand, [op1, op2]), compare=True)
+    op1, op2 = list(map(self.lift_operand, [op1, op2]))
+    if op1.size != op2.size or op1.signed != op2.signed:
+      # Operands of one type compare the same without promotion.
+      op1, op2 = promote(op1, op2, compare=True)
+    # Unsigned if either operand is, as C's usual arithmetic conversions.
+    signed = op1.signed and op2.signed
 
     if (relop.value == '=='):
       return IlCompareEqual(op1.size, op1, op2)
@@ -1927,25 +1990,25 @@ class SemanticsTreeTransformer(Transformer):
       return IlCompareNotEqual(op1.size, op1, op2)
 
     if (relop.value == '<='):
-      if op1.signed:
+      if signed:
         return IlCompareSignedLessEqual(op1.size, op1, op2)
       else:
         return IlCompareUnsignedLessEqual(op1.size, op1, op2)
 
     if (relop.value == '<'):
-      if op1.signed:
+      if signed:
         return IlCompareSignedLessThan(op1.size, op1, op2)
       else:
         return IlCompareUnsignedLessThan(op1.size, op1, op2)
 
     if (relop.value == '>='):
-      if op1.signed:
+      if signed:
         return IlCompareSignedGreaterEqual(op1.size, op1, op2)
       else:
         return IlCompareUnsignedGreaterEqual(op1.size, op1, op2)
 
     if (relop.value == '>'):
-      if op1.signed:
+      if signed:
         return IlCompareSignedGreaterThan(op1.size, op1, op2)
       else:
         return IlCompareUnsignedGreaterThan(op1.size, op1, op2)
@@ -1957,6 +2020,12 @@ class SemanticsTreeTransformer(Transformer):
   @v_args(inline=True)
   def expr_logop(self, op1, logop, op2):
     raise ValueError('Logical operators are not lifted')
+
+  # | "(" CTYPE ")" unary_e -> cast_expr
+  @v_args(inline=True)
+  def cast_expr(self, ctype, val):
+    size, signed = c_type(ctype.value)
+    return convert(self.lift_operand(val), size, signed)
 
   # | logor_e "?" expr ":" ternary_e -> ternary_expr
   @v_args(inline=True)
@@ -1997,10 +2066,20 @@ def literal_fits(expr, size, signed):
   return 0 <= value < (1 << bits)
 
 
+def int_promote(expr):
+  """C's integer promotion: a value narrower than int widens to int, which is
+  signed (it holds every value of the narrower type)."""
+  if expr.size < 4:
+    expr = copy.copy(widen(expr, 4))
+    expr.signed = True
+  return expr
+
+
 def promote(op1, op2, compare=False):
-  """C's usual arithmetic conversions, for size: the narrower operand is
-  extended to the wider one's size. A comparison with a literal that fits the
-  other operand's type compares at that type instead (P == 0xff)."""
+  """C's integer promotions and usual arithmetic conversions, for size: both
+  operands are extended to the wider one's size, at least an int's. A
+  comparison with a literal that fits the other operand's type compares at
+  that type instead (P == 0xff)."""
   if compare:
     for narrow, literal in ((op1, op2), (op2, op1)):
       if literal.size > narrow.size and literal_fits(literal, narrow.size,
@@ -2008,8 +2087,43 @@ def promote(op1, op2, compare=False):
         literal = copy.copy(literal)
         literal.size = narrow.size
         return (narrow, literal) if narrow is op1 else (literal, narrow)
+  op1, op2 = int_promote(op1), int_promote(op2)
   size = max(op1.size, op2.size)
   return widen(op1, size), widen(op2, size)
+
+
+def fold_constant(expr):
+  """The value of a literal, or of arithmetic on literals (a lane index such
+  as 2*i+1 once loops are unrolled), or None."""
+  if getattr(expr, 'type', None) == 'INTCON':
+    return int(expr.value, 0)
+  if isinstance(expr, IlConst):
+    try:
+      return int(expr.val, 0)
+    except ValueError:
+      return None  # An immediate operand.
+  ops = {
+      IlAdd: lambda a, b: a + b,
+      IlSub: lambda a, b: a - b,
+      IlMult: lambda a, b: a * b,
+      IlShiftLeft: lambda a, b: a << b,
+  }
+  if type(expr) in ops:
+    a, b = fold_constant(expr.a), fold_constant(expr.b)
+    if a is not None and b is not None:
+      return ops[type(expr)](a, b)
+  return None
+
+
+def convert(expr, size, signed):
+  """|expr| converted to a C integer type of |size| bytes, as a cast or an
+  assignment does: truncated, or extended as its own type says."""
+  if expr.size > size:
+    expr = IlLowPart(size, expr)
+  else:
+    expr = copy.copy(widen(expr, size))
+  expr.signed = signed
+  return expr
 
 
 def fit_to_size(size, expr):
@@ -2183,19 +2297,20 @@ def genptr_decl_opn(tag, regtype, regid, toss, numregs, i):
 def zero_partial_dest(tag, regtype, regid):
   """Zeroes a write-only destination that the instruction builds in parts.
 
-  fSETWORD, fSETHALF and fSETBYTE lift as read-modify-writes of the
+  fSETWORD, fSETHALF, fSETBYTE and fSETBIT lift as read-modify-writes of the
   destination's temp. A write-only temp starts uninitialised, and Binary Ninja
   cannot fold `(uninitialised & mask) | part` away even when every part is
-  written (combine, bitsplit, swiz).
+  written (combine, bitsplit, swiz, vector compares into a predicate).
   """
   if (not is_writeonly(regid) or 'A_CONDEXEC' in attribdict[tag] or
-      regtype not in 'RC'):
+      regtype not in 'RCP'):
     return []
   var = '{}{}V'.format(regtype, regid)
-  if not re.search(r'fSET(WORD|HALF|BYTE)\(\s*\w+\s*,\s*{}\b'.format(var),
-                   semdict[tag]):
+  if not re.search(
+      r'fSET(WORD|HALF|BYTE|BIT)\(\s*[^,]+\s*,\s*{}\b'.format(var),
+      semdict[tag]):
     return []
-  size = 8 if is_pair(regid) else 4
+  size = 1 if regtype == 'P' else 8 if is_pair(regid) else 4
   return [
       RawC('''il.AddInstruction(il.SetRegister({0}, {1}, il.Const({0}, 0)));'''
            .format(size, var))
@@ -2214,8 +2329,127 @@ def set_overrides():
     semdict[tag] = semoverrides[tag]
 
 
+# C types of the semantics' variables: (size, signed).
+C_TYPES = {
+    'int': (4, True),
+    'unsigned': (4, False),
+    'unsigned int': (4, False),
+    'long long': (8, True),
+    'unsigned long long': (8, False),
+}
+for _bytes in (1, 2, 4, 8):
+  C_TYPES['size{}s_t'.format(_bytes)] = (_bytes, True)
+  C_TYPES['size{}u_t'.format(_bytes)] = (_bytes, False)
+  C_TYPES['int{}_t'.format(8 * _bytes)] = (_bytes, True)
+  C_TYPES['uint{}_t'.format(8 * _bytes)] = (_bytes, False)
+
+
+def c_type(name):
+  return C_TYPES.get(re.sub(r'\s+', ' ', name.strip()))
+
+
+# The scratch temps the lifters have always had, at 8 bytes.
+FIXED_TEMP_NAMES = ('tmp', 'width', 'offset', 'shamt')
+
+# Each tag's local variables: {tag: {name: (temp, size, signed)}}.
+LOCALS = {}
+
+
+def local_declarations(sem):
+  """{name: (size, signed)} for the variables that fHIDE declares, either
+  `fHIDE(int i; size8u_t x;)` or `fHIDE(size4s_t) shamt`. fHIDE also hides
+  code, which is not a declaration and is left alone."""
+  decls = {}
+  for m in re.finditer(r'fHIDE\(\s*([^()]*?)\s*\)\s*(\w*)', sem):
+    body, following = m.group(1), m.group(2)
+    if c_type(body) and following:
+      decls[following] = c_type(body)
+      continue
+    for decl in filter(None, (d.strip() for d in body.split(';'))):
+      dm = re.fullmatch(r'(.+?)\s+(\w+)(\s*=.*)?', decl)
+      if dm and c_type(dm.group(1)):
+        decls[dm.group(2)] = c_type(dm.group(1))
+  return decls
+
+
+def initialise_declarations(sem):
+  """Replaces fHIDE declarations that initialise their variables, such as
+  `fHIDE(size4u_t tmp = 0; size4u_t i;)`, with the assignments."""
+
+  def assignments(m):
+    inits = []
+    for decl in filter(None, (d.strip() for d in m.group(1).split(';'))):
+      dm = re.fullmatch(r'(.+?)\s+(\w+)\s*=\s*(.+)', decl)
+      if dm and c_type(dm.group(1)):
+        inits.append('{} = {};'.format(dm.group(2), dm.group(3)))
+    return ' '.join(inits) if inits else m.group(0)
+
+  return re.sub(r'fHIDE\(\s*([^()]*=[^()]*?)\s*\)', assignments, sem)
+
+
+_FOR_RE = re.compile(r'\bfor\s*\(\s*(\w+)\s*=\s*(\d+)\s*;\s*\1\s*<\s*(\d+)\s*;'
+                     r'\s*\1\s*(?:\+\+|\+=\s*(\d+))\s*\)')
+
+
+def unroll_loops(text):
+  """Unrolls `for (i = A; i < B; i++)` (or `i += S`) loops, with the loop
+  variable replaced by its value in each copy of the body."""
+  while True:
+    m = _FOR_RE.search(text)
+    if not m:
+      return text
+    var, start, end = m.group(1), int(m.group(2)), int(m.group(3))
+    step = int(m.group(4) or 1)
+    j = m.end()
+    while text[j].isspace():
+      j += 1
+    # The body: a block, or one statement.
+    depth, k = 0, j
+    while True:
+      if text[k] in '({':
+        depth += 1
+      elif text[k] in ')}':
+        depth -= 1
+        if depth == 0 and text[j] == '{':
+          break
+      elif text[k] == ';' and depth == 0 and text[j] != '{':
+        break
+      k += 1
+    body = text[j:k + 1]
+    copies = ''.join(
+        re.sub(r'\b{}\b'.format(var), str(v), body)
+        for v in range(start, end, step))
+    text = text[:m.start()] + '{' + copies + '}' + text[k + 1:]
+
+
+def assign_locals(tag, decls, parts):
+  """Gives the local variables used in |parts| temps by size, and renames
+  them local_NAME for the grammar."""
+  used = {
+      name: decls[name]
+      for name in decls
+      if name not in FIXED_TEMP_NAMES and
+      any(re.search(r'\b{}\b'.format(name), part) for part in parts)
+  }
+  counts = {}
+  LOCALS[tag] = {}
+  for name, (size, signed) in used.items():
+    k = counts.get(size, 0)
+    if k >= 8:
+      raise ValueError('More than 8 {}-byte locals'.format(size))
+    counts[size] = k + 1
+    LOCALS[tag]['local_' + name] = ('LOCAL{}_REG + {}'.format(size, k), size,
+                                    signed)
+  return [
+      re.sub(r'\b({})\b'.format('|'.join(used)), r'local_\1', part)
+      if used else part for part in parts
+  ]
+
+
 def preprocess_semantics(tag):
   sem = semdict[tag]
+  decls = local_declarations(sem)
+  sem = initialise_declarations(sem)
 
   cpreprocessor = Preprocessor()
 
@@ -2387,7 +2621,7 @@ def preprocess_semantics(tag):
   clean = ''.join([tok.value for tok in cpreprocessor.parsegen(sem)])
   clean = ''.join([tok.value for tok in cpreprocessor.parsegen(clean)])
   parts.append(clean)
-  return parts
+  return assign_locals(tag, decls, [unroll_loops(part) for part in parts])
 
 
 def genptr_decl_fixed_pred(parts):

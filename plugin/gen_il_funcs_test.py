@@ -962,10 +962,10 @@ class TestGenIlFunc(unittest.TestCase):
                         8, IlRegister(8, 'RddV'),
                         IlNot(
                             8,
-                            IlShiftLeft(8, IlConst(4, 0xffffffff), IlConst(
+                            IlShiftLeft(8, IlConst(8, 0xffffffff), IlConst(
                                 1, 0)))),
                     IlShiftLeft(
-                        8, IlAnd(8, IlConst(4, 'uiV'), IlConst(4, 0xffffffff)),
+                        8, IlZeroExtend(8, IlConst(4, 'uiV')),
                         IlConst(1, 0)))),
             IlSetRegister(
                 8, 'RddV',
@@ -975,10 +975,10 @@ class TestGenIlFunc(unittest.TestCase):
                         8, IlRegister(8, 'RddV'),
                         IlNot(
                             8,
-                            IlShiftLeft(8, IlConst(4, 0xffffffff), IlConst(
+                            IlShiftLeft(8, IlConst(8, 0xffffffff), IlConst(
                                 1, 32)))),
                     IlShiftLeft(8,
-                                IlAnd(8, IlConst(4, 0), IlConst(4, 0xffffffff)),
+                                IlConst(8, 0),
                                 IlConst(1, 32))))
         ])
 
@@ -1269,7 +1269,7 @@ class TestGenIlFunc(unittest.TestCase):
             IlSetRegister(4, 'EA_REG',
                           IlAdd(4, IlRegister(4, 'RsV'), IlConst(4, 'siV'))),
             IlStore(2, IlRegister(4, 'EA_REG'),
-                    IlSignExtend(4, IlLowPart(2, IlRegister(4, 'RtV'))))
+                    IlLowPart(2, IlRegister(4, 'RtV')))
         ])
 
   def test_dcmpyrw(self):
@@ -1477,10 +1477,10 @@ class TestGenIlFunc(unittest.TestCase):
                         8, IlRegister(8, 'RddV'),
                         IlNot(
                             8,
-                            IlShiftLeft(8, IlConst(4, 0xffffffff), IlConst(
+                            IlShiftLeft(8, IlConst(8, 0xffffffff), IlConst(
                                 1, 0)))),
                     IlShiftLeft(
-                        8, IlAnd(8, IlConst(4, 'SiV'), IlConst(4, 0xffffffff)),
+                        8, IlZeroExtend(8, IlConst(4, 'SiV')),
                         IlConst(1, 0)))),
             IlSetRegister(
                 8, 'RddV',
@@ -1490,10 +1490,10 @@ class TestGenIlFunc(unittest.TestCase):
                         8, IlRegister(8, 'RddV'),
                         IlNot(
                             8,
-                            IlShiftLeft(8, IlConst(4, 0xffffffff), IlConst(
+                            IlShiftLeft(8, IlConst(8, 0xffffffff), IlConst(
                                 1, 32)))),
                     IlShiftLeft(
-                        8, IlAnd(8, IlConst(4, 'siV'), IlConst(4, 0xffffffff)),
+                        8, IlZeroExtend(8, IlConst(4, 'siV')),
                         IlConst(1, 32))))
         ])
 

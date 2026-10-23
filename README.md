@@ -44,9 +44,9 @@ version from V5 on.
 
 Each packet is one Binary Ninja instruction. Of the 2,396 instructions:
 
-*   1,185 are lifted to LLIL with their semantics. That is 68% of the 1,748
+*   1,424 are lifted to LLIL with their semantics. That is 81% of the 1,748
     scalar instructions; no HVX instruction is.
-*   1,208 are lifted as intrinsics (560 scalar, 648 HVX). Their registers and
+*   969 are lifted as intrinsics (321 scalar, 648 HVX). Their registers and
     data flow are right, but the operation is opaque. 241 of them load or
     store memory.
 *   3 have their own lifts: `hintjumpr` is a no-op, `trap1` a system call and

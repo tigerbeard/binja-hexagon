@@ -37,6 +37,12 @@ versions differ on which write wins.
 Predicates: the plugin writes compare results as 1 where the hardware writes
 0xff, so a predicate matches when both are 0 or the plugin's is 1 and QEMU's
 0xff. Inputs are 0 or 0xff. USR (the saturation flag) is not compared.
+
+Floating point: sources get floats (moderate values, special values and raw
+bits), and a conversion to an integer gets floats in the integer's range,
+since the IL leaves others undefined, as C does (llil_eval.Undefined cases
+are skipped). A float result agrees when both are NaN: the hardware gives
+all ones, the IL any NaN.
 """
 
 import argparse
@@ -44,6 +50,7 @@ import collections
 import os
 import random
 import re
+import struct
 import sys
 
 import hexasm
@@ -62,7 +69,7 @@ JUMPR_LR = 0x529fc000
 EXCLUDED_ATTRIBS = {
     'A_JUMP', 'A_CALL', 'A_COF', 'A_PRIV', 'A_GUEST', 'A_EXTENSION', 'A_CVI',
     'A_DOTNEWVALUE', 'A_SUBINSN', 'A_HWLOOP0_SETUP', 'A_HWLOOP1_SETUP',
-    'A_HWLOOP0_END', 'A_HWLOOP1_END', 'A_IMPLICIT_WRITES_SP', 'A_FPOP',
+    'A_HWLOOP0_END', 'A_HWLOOP1_END', 'A_IMPLICIT_WRITES_SP',
 }
 
 # brkpt stops QEMU.
@@ -177,6 +184,108 @@ def writes_a_register_twice(info, word):
   return any(len(set(numbers)) < len(numbers) for numbers in written.values())
 
 
+# Floating point.
+_FLOAT_SIZES = {'sf': 4, 'df': 8}
+_INT_RANGES = {'w': (-1 << 31, 1 << 31), 'uw': (0, 1 << 32),
+               'd': (-1 << 63, 1 << 63), 'ud': (0, 1 << 64)}
+FLOAT_SPECIALS = {
+    4: [0, 0x80000000, 0x7f800000, 0xff800000, 0x7fc00000, 0x7f800001, 1,
+        0x807fffff, 0x7f7fffff, 0x00800000, 0x3f800000, 0xbf800000,
+        0x3f000000, 0x3fc00000, 0x40200000, 0xc0200000],
+    8: [0, 1 << 63, 0x7ff0000000000000, 0xfff0000000000000,
+        0x7ff8000000000000, 0x7ff0000000000001, 1, 0x800fffffffffffff,
+        0x7fefffffffffffff, 0x0010000000000000, 0x3ff0000000000000,
+        0xbff0000000000000, 0x3fe0000000000000, 0x3ff8000000000000,
+        0x4004000000000000, 0xc004000000000000],
+}
+
+
+def float_kind(tag):
+  """For a floating-point instruction, the float size of its sources and of
+  its result (None for an integer or predicate), and the range of an integer
+  result."""
+  m = re.fullmatch(r'F2_conv_(u?[wd]|sf|df)2(u?[wd]|sf|df)(_chop)?', tag)
+  if m:
+    return (_FLOAT_SIZES.get(m.group(1)), _FLOAT_SIZES.get(m.group(2)),
+            _INT_RANGES.get(m.group(2)))
+  size = 8 if tag.startswith('F2_df') else 4
+  return size, None if 'cmp' in tag else size, None
+
+
+def float_bits(value, size):
+  return int.from_bytes(struct.pack('<f' if size == 4 else '<d', value),
+                        'little')
+
+
+def is_nan(bits, size):
+  exponent = 8 if size == 4 else 11
+  mantissa = 8 * size - 1 - exponent
+  return ((bits >> mantissa) & ((1 << exponent) - 1) == (1 << exponent) - 1 and
+          bits & ((1 << mantissa) - 1) != 0)
+
+
+def random_float(size, rng, int_range=None):
+  """Bits of a random float: one in |int_range| if given."""
+  if int_range:
+    lo, hi = int_range
+    choice = rng.random()
+    if choice < 0.3:
+      value = rng.choice([0.0, -0.0, 0.5, -0.5, 1.5, 2.5, -2.5, 1.0, -1.0])
+    elif choice < 0.6:
+      value = rng.randrange(lo, hi) + rng.choice((0, 0.25, 0.5, 0.75))
+    else:
+      value = rng.uniform(1, 2) * 2.0**rng.randrange(
+          -8, (hi - lo).bit_length() - 2) * (rng.choice((1, -1)) if lo else 1)
+    if not lo - 1 < value < hi:
+      value = 0.5
+    return float_bits(value, size)
+  choice = rng.random()
+  if choice < 0.25:
+    return rng.choice(FLOAT_SPECIALS[size])
+  if choice < 0.4:
+    return rng.getrandbits(8 * size)
+  return float_bits(
+      rng.uniform(1, 2) * 2.0**rng.randrange(-20, 21) * rng.choice((1, -1)),
+      size)
+
+
+def float_inputs(info, tag, word, regs, rng):
+  """Sets a floating-point instruction's source registers to floats."""
+  source_size, _, int_range = float_kind(tag)
+  if source_size is None:
+    return  # An integer to convert.
+  previous = None
+  for regid in re.findall(r'\bR([stuv]{1,2}|[xy]{1,2})32', info['syntax']):
+    number = field(info, word, regid[0])
+    if len(regid) == 2 and source_size == 4:
+      # A pair of single-precision lanes.
+      value = random_float(4, rng) | (random_float(4, rng) << 32)
+    else:
+      value = random_float(source_size, rng, int_range)
+    if previous is not None and rng.random() < 0.2:
+      value = previous  # Equal operands, for compares.
+    previous = value
+    regs['r%d' % number] = value & 0xffffffff
+    if len(regid) == 2:
+      regs['r%d' % (number + 1)] = value >> 32
+
+
+def nan_groups(info, tag, word):
+  """The registers of a float result, with its float size, where both sides
+  giving NaN agree."""
+  if not tag.startswith(('F2_', 'F7_')):
+    return []
+  _, result_size, _ = float_kind(tag)
+  m = re.search(r'\bR(d{1,2}|x{1,2})32', info['syntax'])
+  if result_size is None or not m:
+    return []
+  number = field(info, word, m.group(1)[0])
+  names = ['r%d' % (number + i) for i in range(len(m.group(1)))]
+  if result_size == 8:
+    return [(names, 8)]
+  return [([name], 4) for name in names]
+
+
 def field(info, word, letter):
   """The value of |word|'s encoding field |letter|."""
   value = 0
@@ -252,33 +361,46 @@ def agree(name, bn, qemu):
   return name.startswith('p') and bn == 1 and qemu == 0xff
 
 
-def compare(binja, cases):
-  """Runs |cases| [(tag, word, regs)]; returns {tag: [mismatch text]}."""
+def compare(binja, cases, skipped=None):
+  """Runs |cases| [(tag, word, regs, nan_groups)]; returns {tag: [mismatch
+  text]}. Cases the IL leaves undefined are counted in |skipped|."""
   data = random.Random(1).randbytes(DATA_SIZE)
-  code = b''.join(w.to_bytes(4, 'little') + JUMPR_LR.to_bytes(4, 'little')
-                  for _, w, _ in cases)
+  code = b''.join(case[1].to_bytes(4, 'little') +
+                  JUMPR_LR.to_bytes(4, 'little') for case in cases)
   bv = hexasm.load(binja, hexasm.Snippet(
       code, {str(i): 8 * i for i in range(len(cases))}))
   problems = collections.defaultdict(list)
   try:
     with qemu_oracle.Qemu() as qemu:
       qemu.write_memory(DATA_BASE, data)
-      for i, (tag, word, regs) in enumerate(cases):
+      for i, (tag, word, regs, nans) in enumerate(cases):
         func = bv.get_function_at(8 * i)
         memory, stores = WindowMemory(data), []
         try:
           bn = llil_eval.evaluate(func, bn_regs(regs), memory, stores)
+        except llil_eval.Undefined:
+          if skipped is not None:
+            skipped[tag] += 1
+          continue
         except llil_eval.Unsupported as e:
           problems[tag].append('{:08x}: {}'.format(word, e))
           continue
         # At the plugin's address, for PC-relative instructions.
         hw = qemu.run(word.to_bytes(4, 'little'), regs, packets=1,
                       address=8 * i)
+        both_nan = set()
+        for names, size in nans:
+          values = [sum(r.get(key(n), 0) << (32 * k)
+                        for k, n in enumerate(names))
+                    for r, key in ((bn, QEMU_TO_BN.get), (hw, str))]
+          if all(is_nan(v, size) for v in values):
+            both_nan.update(names)
         diffs = [
             '{}: plugin {:#x} qemu {:#x}'.format(
                 name, bn.get(QEMU_TO_BN[name], -1), hw[name])
             for name in COMPARED
-            if not agree(name, bn.get(QEMU_TO_BN[name], -1), hw[name])
+            if name not in both_nan and
+            not agree(name, bn.get(QEMU_TO_BN[name], -1), hw[name])
         ]
         for address, size in stores:
           mine = bytes(memory[address + j] for j in range(size))
@@ -310,7 +432,10 @@ def cases_for(tags, iset, samples, seed=0, attribs=None):
     word = random_word(info, rng)
     if writes_a_register_twice(info, word):
       return None
-    return word, random_regs(rng)
+    regs = random_regs(rng)
+    if 'A_FPOP' in attribs.get(tag, set()):
+      float_inputs(info, tag, word, regs, rng)
+    return word, regs
 
   cases = []
   for tag in tags:
@@ -322,7 +447,7 @@ def cases_for(tags, iset, samples, seed=0, attribs=None):
           break
       else:
         raise ValueError('no usable random word for ' + tag)
-      cases.append((tag,) + case)
+      cases.append((tag,) + case + (nan_groups(iset[tag], tag, case[0]),))
   return cases
 
 
@@ -341,11 +466,14 @@ def main():
   attribs = op_attribs()
   tags = [t for t in lifted_tags()
           if re.search(args.tags, t) and testable(t, attribs, iset)]
-  problems = compare(binja, cases_for(tags, iset, args.samples))
+  skipped = collections.Counter()
+  problems = compare(binja, cases_for(tags, iset, args.samples), skipped)
   for tag in sorted(problems):
     print('{} ({}):'.format(tag, iset[tag]['syntax']))
     for p in problems[tag][:2]:
       print('  ' + p)
+  if skipped:
+    print('cases undefined in IL, skipped: {}'.format(dict(skipped)))
   print('{} of {} instructions differ'.format(len(problems), len(tags)))
   return 1 if problems else 0
 

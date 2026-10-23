@@ -271,6 +271,16 @@ SUPPORTED_TAGS = [
     'J2_jumprtnewpt_rb', 'J2_jumprfnewpt_rb', 'J2_callr_rb', 'J2_callrh_rb',
     'J2_callrt_rb', 'J2_callrf_rb', 'A2_nop_rb', 'S2_allocframe_rb',
     'SS2_allocframe_rb', 'J2_trap2',
+    # Floating point, as float IL: arithmetic, compares and the conversions
+    # other than those from or to 64-bit unsigned integers.
+    'F2_sfadd', 'F2_sfsub', 'F2_sfmpy', 'F2_dfadd', 'F2_dfsub', 'F7_vsfadd',
+    'F7_vsfsub', 'F7_vsfmpy', 'F2_sfcmpeq', 'F2_sfcmpge', 'F2_sfcmpgt',
+    'F2_sfcmpuo', 'F2_dfcmpeq', 'F2_dfcmpge', 'F2_dfcmpgt', 'F2_dfcmpuo',
+    'F2_conv_sf2df', 'F2_conv_df2sf', 'F2_conv_w2sf', 'F2_conv_uw2sf',
+    'F2_conv_d2sf', 'F2_conv_w2df', 'F2_conv_uw2df', 'F2_conv_d2df',
+    'F2_conv_sf2w', 'F2_conv_sf2w_chop', 'F2_conv_sf2uw', 'F2_conv_sf2uw_chop',
+    'F2_conv_sf2d', 'F2_conv_sf2d_chop', 'F2_conv_df2w', 'F2_conv_df2w_chop',
+    'F2_conv_df2uw', 'F2_conv_df2uw_chop', 'F2_conv_df2d', 'F2_conv_df2d_chop',
     # Shifts by a register amount, which shift the other way when the amount
     # is negative, and register-amount bit operations.
     'S2_asl_r_r', 'S2_asl_r_r_acc', 'S2_asl_r_r_nac', 'S2_asl_r_r_and',

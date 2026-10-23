@@ -30,6 +30,9 @@
 
 using namespace BinaryNinja;
 
+// The Hexagon ABI's standard calling convention: arguments in R0-R5, results
+// in R0 or R1:0, R16-R27 and FP preserved by the callee, the caller's
+// outgoing argument area on the stack left to the caller.
 class HexagonCallingConvention : public CallingConvention {
 public:
   HexagonCallingConvention(Architecture *arch)
@@ -37,16 +40,25 @@ public:
 
   virtual std::vector<uint32_t> GetIntegerArgumentRegisters() override {
     return std::vector<uint32_t>{HEX_REG_R00, HEX_REG_R01, HEX_REG_R02,
-                                 HEX_REG_R03, HEX_REG_R04, HEX_REG_R05,
-                                 HEX_REG_R06, HEX_REG_R07, HEX_REG_R08};
+                                 HEX_REG_R03, HEX_REG_R04, HEX_REG_R05};
   }
 
+  // Everything a call may change: R0-R15 and R28, LR (the call writes it),
+  // the predicates, and the loop and modifier registers.
   virtual std::vector<uint32_t> GetCallerSavedRegisters() override {
-    return std::vector<uint32_t>{};
+    return std::vector<uint32_t>{
+        HEX_REG_R00, HEX_REG_R01, HEX_REG_R02,  HEX_REG_R03, HEX_REG_R04,
+        HEX_REG_R05, HEX_REG_R06, HEX_REG_R07,  HEX_REG_R08, HEX_REG_R09,
+        HEX_REG_R10, HEX_REG_R11, HEX_REG_R12,  HEX_REG_R13, HEX_REG_R14,
+        HEX_REG_R15, HEX_REG_R28, HEX_REG_LR,   HEX_REG_P3_0, HEX_REG_SA0,
+        HEX_REG_LC0, HEX_REG_SA1, HEX_REG_LC1,  HEX_REG_M0,  HEX_REG_M1};
   }
 
   virtual std::vector<uint32_t> GetCalleeSavedRegisters() override {
-    return std::vector<uint32_t>{HEX_REG_FP, HEX_REG_LR};
+    return std::vector<uint32_t>{
+        HEX_REG_R16, HEX_REG_R17, HEX_REG_R18, HEX_REG_R19, HEX_REG_R20,
+        HEX_REG_R21, HEX_REG_R22, HEX_REG_R23, HEX_REG_R24, HEX_REG_R25,
+        HEX_REG_R26, HEX_REG_R27, HEX_REG_FP};
   }
 
   virtual uint32_t GetGlobalPointerRegister() override { return HEX_REG_GP; }
@@ -59,7 +71,8 @@ public:
     return HEX_REG_R01;
   }
 
-  virtual bool IsStackAdjustedOnReturn() override { return true; }
+  // The callee does not pop stack arguments.
+  virtual bool IsStackAdjustedOnReturn() override { return false; }
 };
 
 class HexagonElfRelocationHandler : public RelocationHandler {

@@ -631,5 +631,36 @@ f:
     self.assertNotIn('arg1 == 0', hlil)
 
 
+class TestFrames(SnippetTest):
+  # #11: the LR:FP save of allocframe stayed in HLIL (Binary Ninja 3.x); and
+  # the duplex deallocframe/dealloc_return wrote 8-byte values into LR and FP.
+
+  def test_frame_save_is_hidden(self):
+    funcs = self.analyse('''
+leaf:
+  { allocframe(#8) }
+  { r0 = #256 }
+  { dealloc_return }
+dealloc_then_return:
+  { allocframe(#16) }
+  { r0 = #1 }
+  { deallocframe }
+  { jumpr r31 }
+''')
+    self.assertEqual(hexasm.hlil(funcs['leaf']), '\nreturn 0x100')
+    self.assertEqual(hexasm.hlil(funcs['dealloc_then_return']), '\nreturn 1')
+
+  def test_duplex_dealloc_writes_four_byte_registers(self):
+    f = self.analyse('''
+f:
+  { allocframe(#8) }
+  { r0 = #1 }
+  { r17:16 = memd(r29+#0); dealloc_return }
+''')['f']
+    il = hexasm.llil(f)
+    self.assertRegex(il, r'LR = \(.*\)\.d')
+    self.assertNotRegex(il, r'(LR|FP) = sx\.q')
+
+
 if __name__ == '__main__':
   unittest.main()

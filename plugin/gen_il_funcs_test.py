@@ -1058,15 +1058,18 @@ class TestGenIlFunc(unittest.TestCase):
             IlSetRegister(8, 'TMP_REG', IlRegister(8, 'TMP_REG')),
             IlSetRegister(
                 4, 'HEX_REG_LR',
-                IlSignExtend(
-                    8,
-                    IlLowPart(
-                        4,
-                        IlArithShiftRight(8, IlRegister(8, 'TMP_REG'),
-                                          IlConst(1, 32))))),
+                IlLowPart(
+                    4,
+                    IlSignExtend(
+                        8,
+                        IlLowPart(
+                            4,
+                            IlArithShiftRight(8, IlRegister(8, 'TMP_REG'),
+                                              IlConst(1, 32)))))),
             IlSetRegister(
                 4, 'HEX_REG_FP',
-                IlSignExtend(8, IlLowPart(4, IlRegister(8, 'TMP_REG')))),
+                IlLowPart(
+                    4, IlSignExtend(8, IlLowPart(4, IlRegister(8, 'TMP_REG'))))),
             IlSetRegister(4, 'HEX_REG_SP',
                           IlAdd(4, IlRegister(4, 'EA_REG'), IlConst(4, 8))),
             IlReturn(

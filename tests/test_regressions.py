@@ -351,10 +351,24 @@ f:
   { r0 = add(r0, r2) }
   { jumpr r31 }
 ''')['f']
+    # Lifted since #48: the load reads the old base, which then advances.
     il = hexasm.llil(f)
-    self.assertRegex(il, r'temp#\d+, temp#\d+ = L2_loadri_pr\(temp#\d+\.d, M0\)')
-    self.assertIn('R0 = ', il)
-    self.assertIn('R2 = ', il)
+    self.assertIn('3: temp#2.d = temp#1.d\n4: temp#1.d = temp#1.d + M0\n'
+                  '5: temp#3.d = [temp#2.d].d\n6: R0 = temp#1.d\n'
+                  '7: R2 = temp#3.d', il)
+
+  def test_two_output_intrinsic_writes_both(self):
+    f = self.analyse('''
+f:
+  { r1:0 = add(r3:2, r5:4, p0):carry }
+  { jumpr r31 }
+''')['f']
+    il = hexasm.llil(f)
+    self.assertRegex(
+        il, r'temp#\d+, temp#\d+ = A4_addp_c\(temp#\d+\.q, temp#\d+\.q, '
+        r'temp#\d+\.b\)')
+    self.assertIn('R1:R0 = ', il)
+    self.assertIn('P0 = ', il)
 
 
 class TestAcquireRelease(SnippetTest):

@@ -26,8 +26,7 @@ and m0-m1 must agree afterwards, and so must the bytes the lifted IL stores.
 Loads and stores address a data window that holds the same random bytes in
 QEMU and in llil_eval: the base register (and GP) point into it, an index
 register is a small multiple of 8, and m0/m1 hold small increments. Absolute addresses
-(which need constant extenders), locked, circular and bit-reversed accesses
-are left out, as are branches, system, HVX, new-value and duplex
+(which need constant extenders) and locked accesses are left out, as are branches, system, HVX, new-value and duplex
 instructions.
 
 Predicates: the plugin writes compare results as 1 where the hardware writes
@@ -75,7 +74,8 @@ _INDEX = re.compile(r'\+\s*R([a-z])32\s*<<')
 
 QEMU_TO_BN = dict({'r%d' % i: 'R%d' % i for i in range(29)},
                   r29='SP', r30='FP', r31='LR', p0='P0', p1='P1', p2='P2',
-                  p3='P3', m0='M0', m1='M1', usr='USR', gp='GP')
+                  p3='P3', m0='M0', m1='M1', usr='USR', gp='GP', cs0='CS0',
+                  cs1='CS1')
 COMPARED = ['r%d' % i for i in range(32)] + ['p0', 'p1', 'p2', 'p3', 'm0',
                                                'm1']
 
@@ -104,7 +104,7 @@ def testable(tag, attribs, iset):
   syntax = info['syntax']
   if attribs.get(tag, set()) & MEMORY_ATTRIBS and (
       not _MEMORY_OPERAND.search(syntax) or tag.startswith('Y') or
-      re.search(r'locked|:circ|:brev|phys', syntax) or
+      re.search(r'locked|phys', syntax) or
       # V79 :nt stores, which QEMU's newest CPU (V73) does not have.
       ':nt' in syntax):
     return False
@@ -189,6 +189,15 @@ def memory_case(info, rng):
     regs['r%d' % numbers['index']] = 8 * rng.randrange(8)
   regs['m0'] = (8 * rng.randrange(-8, 8)) & 0xffffffff
   regs['m1'] = (8 * rng.randrange(-8, 8)) & 0xffffffff
+  if ':circ' in info['syntax']:
+    # A circular buffer: the start (CS) just below the base, and in M the
+    # increment I, the legacy K (mostly 0) and the length.
+    for n in (0, 1):
+      length = rng.choice((8 * rng.randrange(1, 64), rng.randrange(0x20000)))
+      k = 0 if rng.random() < 0.7 else rng.randrange(1, 16)
+      regs['m%d' % n] = ((rng.randrange(16) << 28) | (k << 24) |
+                         (rng.randrange(0x80) << 17) | length)
+      regs['cs%d' % n] = regs['r%d' % numbers['base']] - 8 * rng.randrange(64)
   return word, regs
 
 

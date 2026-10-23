@@ -406,5 +406,29 @@ SUPPORTED_TAGS = [
     'L2_loadbsw4_io', 'L4_loadbsw4_ur', 'L4_loadbsw4_ap', 'L2_loadbsw4_pi',
     'L2_loadalignh_io', 'L4_loadalignh_ur', 'L4_loadalignh_ap',
     'L2_loadalignh_pi', 'L2_loadalignb_io', 'L4_loadalignb_ur',
-    'L4_loadalignb_ap', 'L2_loadalignb_pi'
+    'L4_loadalignb_ap', 'L2_loadalignb_pi',
+    # Post-increment by a modifier register, and bit-reversed addressing.
+    'L2_loadrub_pr', 'L2_loadrub_pbr', 'L2_loadrb_pr', 'L2_loadrb_pbr',
+    'L2_loadruh_pr', 'L2_loadruh_pbr', 'L2_loadrh_pr', 'L2_loadrh_pbr',
+    'L2_loadri_pr', 'L2_loadri_pbr', 'L2_loadrd_pr', 'L2_loadrd_pbr',
+    'L2_loadbzw2_pr', 'L2_loadbzw2_pbr', 'L2_loadbzw4_pr', 'L2_loadbzw4_pbr',
+    'L2_loadbsw2_pr', 'L2_loadbsw2_pbr', 'L2_loadbsw4_pr', 'L2_loadbsw4_pbr',
+    'L2_loadalignh_pr', 'L2_loadalignh_pbr', 'L2_loadalignb_pr',
+    'L2_loadalignb_pbr', 'S2_storerb_pr', 'S2_storerb_pbr', 'S2_storerh_pr',
+    'S2_storerh_pbr', 'S2_storerf_pr', 'S2_storerf_pbr', 'S2_storeri_pr',
+    'S2_storeri_pbr', 'S2_storerd_pr', 'S2_storerd_pbr', 'S2_storerinew_pr',
+    'S2_storerinew_pbr', 'S2_storerbnew_pr', 'S2_storerbnew_pbr',
+    'S2_storerhnew_pr', 'S2_storerhnew_pbr',
+    # Circular addressing.
+    'L2_loadrub_pci', 'L2_loadrub_pcr', 'L2_loadrb_pci', 'L2_loadrb_pcr',
+    'L2_loadruh_pci', 'L2_loadruh_pcr', 'L2_loadrh_pci', 'L2_loadrh_pcr',
+    'L2_loadri_pci', 'L2_loadri_pcr', 'L2_loadrd_pci', 'L2_loadrd_pcr',
+    'L2_loadbzw2_pci', 'L2_loadbzw2_pcr', 'L2_loadbzw4_pci', 'L2_loadbzw4_pcr',
+    'L2_loadbsw2_pci', 'L2_loadbsw2_pcr', 'L2_loadbsw4_pci', 'L2_loadbsw4_pcr',
+    'L2_loadalignh_pci', 'L2_loadalignh_pcr', 'L2_loadalignb_pci',
+    'L2_loadalignb_pcr', 'S2_storerb_pci', 'S2_storerb_pcr', 'S2_storerh_pci',
+    'S2_storerh_pcr', 'S2_storerf_pci', 'S2_storerf_pcr', 'S2_storeri_pci',
+    'S2_storeri_pcr', 'S2_storerd_pci', 'S2_storerd_pcr', 'S2_storerinew_pci',
+    'S2_storerinew_pcr', 'S2_storerbnew_pci', 'S2_storerbnew_pcr',
+    'S2_storerhnew_pci', 'S2_storerhnew_pcr'
 ]

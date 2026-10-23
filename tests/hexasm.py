@@ -62,13 +62,14 @@ def assemble(source, mcpu=MCPU, mattr=MATTR):
     asm, obj, text = (os.path.join(tmp, n) for n in ('a.s', 'a.o', 'a.bin'))
     with open(asm, 'w') as f:
       f.write('\t.text\n' + source + '\n')
-    subprocess.run([
+    mc = subprocess.run([
         llvm_tool('llvm-mc'), '-triple=hexagon', '-mcpu=' + mcpu,
         '-mattr=' + mattr, '-filetype=obj', asm, '-o', obj
     ],
-                   check=True,
-                   capture_output=True,
-                   text=True)
+                        capture_output=True,
+                        text=True)
+    if mc.returncode != 0:
+      raise ValueError('llvm-mc failed:\n' + mc.stderr)
     relocs = subprocess.run([llvm_tool('llvm-readelf'), '-r', obj],
                             check=True,
                             capture_output=True,

@@ -24,6 +24,7 @@
 #include "plugin/insn_util.h"
 #include "plugin/decoder.h"
 #include "plugin/relocs.h"
+#include "plugin/text_util.h"
 
 using namespace BinaryNinja;
 
@@ -233,59 +234,7 @@ public:
   }
 
   std::string GetRegisterName(uint32_t reg) override {
-    switch (reg) {
-    case HEX_REG_R00 ... HEX_REG_R28:
-      return absl::StrFormat("R%d", reg - HEX_REG_R00);
-    case HEX_REG_SP: // R29
-      return "SP";
-    case HEX_REG_FP: // R30
-      return "FP";
-    case HEX_REG_LR: // R31
-      return "LR";
-    case HEX_REG_SA0: // C00
-      return "SA0";
-    case HEX_REG_LC0: // C01
-      return "LC0";
-    case HEX_REG_SA1: // C02
-      return "SA1";
-    case HEX_REG_LC1: // C03
-      return "LC1";
-    case HEX_REG_P3_0: // C04
-      return "P3:0";
-    case HEX_REG_C05:
-      return "C5";
-    case HEX_REG_M0: // C06
-      return "M0";
-    case HEX_REG_M1: // C07
-      return "M1";
-    case HEX_REG_USR: // C08
-      return "USR";
-    case HEX_REG_PC: // C09
-      return "PC";
-    case HEX_REG_UGP: // C10
-      return "UGP";
-    case HEX_REG_GP: // C11
-      return "GP";
-    case HEX_REG_CS0: // C12
-      return "CS0";
-    case HEX_REG_CS1: // C13
-      return "CS1";
-    case HEX_REG_C14 ... HEX_REG_C31:
-      return absl::StrFormat("C%d", reg - HEX_REG_C00);
-    case HEX_REG_P0: // Subreg of HEX_REG_P3_0
-      return "P0";
-    case HEX_REG_P1: // Subreg of HEX_REG_P3_0
-      return "P1";
-    case HEX_REG_P2: // Subreg of HEX_REG_P3_0
-      return "P2";
-    case HEX_REG_P3: // Subreg of HEX_REG_P3_0
-      return "P3";
-    case HEX_REG_USR_LPCFG: // Subreg of HEX_REG_USR
-      return "LPCFG";
-    default:
-      LOG(ERROR) << "Unexpected GetRegisterName for reg " << reg;
-    }
-    return "??";
+    return GetArchRegisterName(reg);
   }
 
   std::string GetFlagName(uint32_t flag) override {

@@ -125,6 +125,15 @@ enum {
   // Circular start registers.
   HEX_REG_CS0 = HEX_REG_C12,
   HEX_REG_CS1 = HEX_REG_C13,
+  // Cycle count, frame protection, packet count and timer registers.
+  HEX_REG_UPCYCLELO = HEX_REG_C14,
+  HEX_REG_UPCYCLEHI = HEX_REG_C15,
+  HEX_REG_FRAMELIMIT = HEX_REG_C16,
+  HEX_REG_FRAMEKEY = HEX_REG_C17,
+  HEX_REG_PKTCOUNTLO = HEX_REG_C18,
+  HEX_REG_PKTCOUNTHI = HEX_REG_C19,
+  HEX_REG_UTIMERLO = HEX_REG_C30,
+  HEX_REG_UTIMERHI = HEX_REG_C31,
 
   //
   // Sub registers.

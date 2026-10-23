@@ -18,13 +18,31 @@
 
 #pragma once
 
+#include <cstdint>
+#include <string>
+
 #include "absl/strings/string_view.h"
 
-// Instruction text tokenizer helper.
+// Instruction text tokenizer helpers.
+
 // Returns register name for disassembly listing.
-//  ('Rt', 10)  -> "R10"
-//  ('Rs', 29)  -> "SP"
-//  ('Rss', 4)  -> "R05:R04"
-//  ('Rd.L', 4) -> "R04.L"
+//  ('R', "", 10)  -> "R10"
+//  ('R', "", 29)  -> "SP"
+//  ('R', "L", 4)  -> "R4.L"
 std::string GetRegisterName(absl::string_view reg_type,
                             absl::string_view hi_low_modifier, int regno);
+
+// Returns a register pair's name as the manuals write it, from its low
+// register.
+//  ('R', 16) -> "R17:16"
+//  ('C', 0)  -> "C1:0"
+std::string GetRegisterPairName(absl::string_view reg_type, int regno);
+
+// Returns the name of a register in the plugin's register numbering
+// (hex_regs.h).
+std::string GetArchRegisterName(uint32_t reg);
+
+// Formats an immediate in hex. Signed immediates keep their sign:
+//  (-16, true)  -> "-0x10"
+//  (-16, false) -> "0xfffffff0"
+std::string ImmediateHex(int32_t value, bool is_signed);

@@ -377,15 +377,11 @@ class InsnTreeTransformer(Transformer):
       ]
 
     if len(b) == 2:
-      # Register pair.
+      # Register pair, written as in the manuals: R17:16.
       assert (not c)
       return [
-          RegisterToken(
-              'GetRegisterName("{0}", "{1}", insn.regno[{2}]+1)'.format(
-                  a, c, regno)),
-          TextToken('":"'),
-          RegisterToken('GetRegisterName("{0}", "{1}", insn.regno[{2}])'.format(
-              a, c, regno)),
+          RegisterToken('GetRegisterPairName("{0}", insn.regno[{1}])'.format(
+              a, regno)),
       ]
 
     assert (0)
@@ -424,8 +420,9 @@ class InsnTreeTransformer(Transformer):
               'pc + insn.immed[{0}]'.format(ii)),
       ]
     else:
-      if ((immlett.isupper() and self.extendable_upper_imm) or
-          (immlett.islower() and self.extendable_lower_imm)):
+      extendable = ((immlett.isupper() and self.extendable_upper_imm) or
+                    (immlett.islower() and self.extendable_lower_imm))
+      if extendable:
         res += [
             TextToken('(insn.extension_valid ? "##" : "#")'),
         ]
@@ -433,9 +430,16 @@ class InsnTreeTransformer(Transformer):
         res += [
             TextToken('"#"'),
         ]
+      # Signed immediates print with their sign; a constant-extended value
+      # is a full 32-bit constant, usually an address, and prints unsigned.
+      if immlett in 'sSm':
+        is_signed = '!insn.extension_valid' if extendable else 'true'
+      else:
+        is_signed = 'false'
       res += [
-          IntegerToken('StrCat("0x", Hex(insn.immed[{0}]))'.format(ii),
-                       'insn.immed[{0}]'.format(ii)),
+          IntegerToken(
+              'ImmediateHex(insn.immed[{0}], {1})'.format(ii, is_signed),
+              'insn.immed[{0}]'.format(ii)),
       ]
     return res
 
@@ -471,7 +475,7 @@ class InsnTreeTransformer(Transformer):
   def const(self, num):
     return [
         TextToken('"#"'),
-        IntegerToken('StrCat("0x", Hex({}))'.format(num), '{}'.format(num)),
+        IntegerToken('ImmediateHex({}, true)'.format(num), '{}'.format(num)),
     ]
 
   # pred_reg: "p" DIGIT

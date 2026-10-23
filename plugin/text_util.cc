@@ -69,7 +69,23 @@ std::string ControlRegisterName(uint32_t reg) {
     return "CS0";
   case HEX_REG_CS1: // C13
     return "CS1";
-  case HEX_REG_C14 ... HEX_REG_C31:
+  case HEX_REG_UPCYCLELO: // C14
+    return "UPCYCLELO";
+  case HEX_REG_UPCYCLEHI: // C15
+    return "UPCYCLEHI";
+  case HEX_REG_FRAMELIMIT: // C16
+    return "FRAMELIMIT";
+  case HEX_REG_FRAMEKEY: // C17
+    return "FRAMEKEY";
+  case HEX_REG_PKTCOUNTLO: // C18
+    return "PKTCOUNTLO";
+  case HEX_REG_PKTCOUNTHI: // C19
+    return "PKTCOUNTHI";
+  case HEX_REG_UTIMERLO: // C30
+    return "UTIMERLO";
+  case HEX_REG_UTIMERHI: // C31
+    return "UTIMERHI";
+  case HEX_REG_C20 ... HEX_REG_C29: // Reserved.
     return absl::StrCat("C", reg - HEX_REG_C00);
   default:
     LOG(FATAL) << "Unexpected control register reg " << reg;
@@ -283,4 +299,31 @@ std::string GetRegisterName(absl::string_view reg_type,
     absl::StrAppend(&out, ".", hi_low_modifier);
   }
   return out;
+}
+
+std::string GetRegisterPairName(absl::string_view reg_type, int regno) {
+  return absl::StrCat(reg_type, regno + 1, ":", regno);
+}
+
+std::string GetArchRegisterName(uint32_t reg) {
+  switch (reg) {
+  case HEX_REG_R00 ... HEX_REG_R31:
+    return GeneralRegisterName(reg);
+  case HEX_REG_C00 ... HEX_REG_C31:
+    return ControlRegisterName(reg);
+  case HEX_REG_P0 ... HEX_REG_P3:
+    return PredicateRegisterName(reg);
+  case HEX_REG_USR_LPCFG: // Subreg of HEX_REG_USR
+    return "LPCFG";
+  default:
+    LOG(ERROR) << "Unexpected GetRegisterName for reg " << reg;
+  }
+  return "??";
+}
+
+std::string ImmediateHex(int32_t value, bool is_signed) {
+  if (is_signed && value < 0) {
+    return absl::StrCat("-0x", absl::Hex(-static_cast<int64_t>(value)));
+  }
+  return absl::StrCat("0x", absl::Hex(static_cast<uint32_t>(value)));
 }

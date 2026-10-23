@@ -81,7 +81,7 @@ class TestPluginIl(unittest.TestCase):
         self.list_asm(func), '''
 { allocframe(SP,#0x8):raw }
 { R0 = #0x100 }
-{ LR:FP = dealloc_return(FP):raw }''')
+{ R31:30 = dealloc_return(FP):raw }''')
     self.assertEqual(
         self.list_llil(func), '''
 0: temp29.d = SP {arg_0}
@@ -104,7 +104,7 @@ class TestPluginIl(unittest.TestCase):
     func = self.get_function('test_pair_operations')
     self.assertEqual(
         self.list_asm(func), '''
-{ R5:R4 = add(R3:R2,R9:R8) }
+{ R5:4 = add(R3:2,R9:8) }
 { jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
@@ -763,7 +763,7 @@ R1 = memw(0+##0x123450) }
     self.assertEqual(
         self.list_asm(func), '''
 { R0 = #0x1 }
-{ R3:R2 = combine(#0x0,R0) }
+{ R3:2 = combine(#0x0,R0) }
 { jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
@@ -780,7 +780,7 @@ R1 = memw(0+##0x123450) }
     self.assertEqual(
         self.list_asm(func), '''
 { R0 = #0x1 }
-{ R3:R2 = combine(R0,#0x0) }
+{ R3:2 = combine(R0,#0x0) }
 { jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
@@ -797,7 +797,7 @@ R1 = memw(0+##0x123450) }
     self.assertEqual(
         self.list_asm(func), '''
 { immext(#0x30400)
-R3:R2 = combine(#0x1,##0x30400) }
+R3:2 = combine(#0x1,##0x30400) }
 { jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
@@ -812,7 +812,7 @@ R3:R2 = combine(#0x1,##0x30400) }
     self.assertEqual(
         self.list_asm(func), '''
 { R0 = #0x1; R1 = #0x2 }
-{ R3:R2 = combine(R0,R1) }
+{ R3:2 = combine(R0,R1) }
 { jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
@@ -843,7 +843,7 @@ R3:R2 = combine(#0x1,##0x30400) }
     func = self.get_function('test_rol_pair')
     self.assertEqual(
         self.list_asm(func), '''
-{ R5:R4 = rol(R1:R0,#0xc) }
+{ R5:4 = rol(R1:0,#0xc) }
 { jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
@@ -857,8 +857,8 @@ R3:R2 = combine(#0x1,##0x30400) }
     func = self.get_function('test_clobbered_pair')
     self.assertEqual(
         self.list_asm(func), '''
-{ R17:R16 = combine(R0,R1)
-memd(SP+#0xfffffff0) = R17:R16; allocframe(#0x18) }
+{ R17:16 = combine(R0,R1)
+memd(SP+#-0x10) = R17:16; allocframe(#0x18) }
 { jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''

@@ -21,6 +21,7 @@ removes the marker.
 """
 
 import os
+import re
 import sys
 import unittest
 
@@ -166,6 +167,58 @@ f:
 { immext(#0x80000000)
 R0 = ##0x80000000 }
 { jumpr LR }''')
+
+
+class TestRegisterPairs(SnippetTest):
+
+  def test_stored_pair_is_not_the_address(self):
+    # #2: the source pair R1:0 and the effective address shared a temp, so
+    # memd stored its own address.
+    f = self.analyse('''
+f:
+  { memd(r29+#8) = r1:0 }
+  { jumpr r31 }
+''')['f']
+    il = hexasm.llil(f)
+    self.assertIn('0: temp#0.q = R1:R0', il)
+    self.assertIn('1: temp#1.d = SP + 8', il)
+    self.assertIn('2: [temp#1.d {arg_8}].q = temp#0.q', il)
+
+  def test_accumulator_pair_is_eight_bytes(self):
+    # #14: read-write pairs (Rxx) were read and written as 4 bytes.
+    f = self.analyse('''
+f:
+  { r1:0 += mpy(r2, r3) }
+  { jumpr r31 }
+''')['f']
+    self.assertIn('1: temp#0.q = temp#0.q + sx.q(R2) * sx.q(R3)',
+                  hexasm.llil(f))
+
+  def test_insert_source_pair_keeps_its_value(self):
+    # #2: the source pair R5:4 shared a temp with insert's width.
+    f = self.analyse('''
+f:
+  { r1:0 = insert(r5:4, #8, #4) }
+  { jumpr r31 }
+''')['f']
+    il = hexasm.llil(f)
+    self.assertIn('temp#1.q = R5:R4', il)
+    self.assertIn('temp#2.q = 8', il)
+    self.assertIn('(temp#1.q & ((sx.q(1) << temp#2.q) - 1))', il)
+
+  def test_register_and_pair_in_one_packet_keep_separate_temps(self):
+    # #2: R0 and R1:0 written in one packet shared a temp, and R1 was lost.
+    f = self.analyse('''
+f:
+  { if (p0) r0 = #1; if (!p0) r1:0 = combine(r2, r3) }
+  { jumpr r31 }
+''')['f']
+    il = hexasm.llil(f)
+    self.assertRegex(il, r'R0 = temp#(\d+)\.d')
+    self.assertRegex(il, r'R1:R0 = temp#(\d+)\.q')
+    single = re.search(r'R0 = temp#(\d+)\.d', il).group(1)
+    pair = re.search(r'R1:R0 = temp#(\d+)\.q', il).group(1)
+    self.assertNotEqual(single, pair)
 
 
 if __name__ == '__main__':

@@ -411,5 +411,42 @@ f:
     self.assertEqual(llvm_diff.compare(binja, words), [])
 
 
+class TestCallingConvention(SnippetTest):
+  # #5: arguments R0-R8, no caller-saved registers, only FP and LR
+  # callee-saved, and the callee popping stack arguments.
+
+  def test_register_lists(self):
+    cc = binja.Architecture['hexagon'].calling_conventions['regparam']
+    self.assertEqual(cc.int_arg_regs, ['R0', 'R1', 'R2', 'R3', 'R4', 'R5'])
+    self.assertEqual(cc.callee_saved_regs,
+                     ['R{}'.format(n) for n in range(16, 28)] + ['FP'])
+    caller_saved = set(cc.caller_saved_regs)
+    self.assertTrue({'R{}'.format(n) for n in range(16)} <= caller_saved)
+    self.assertTrue({'R28', 'LR', 'P3:0'} <= caller_saved)
+    self.assertFalse(cc.stack_adjusted_on_return)
+
+  def test_unknown_callee_clobbers_caller_saved_registers(self):
+    # R16 survives the call; R2 does not.
+    f = self.analyse('''
+f:
+  { r16 = #5; r2 = #7 }
+  { callr r3 }
+  { r0 = add(r16, r2) }
+  { jumpr r31 }
+''')['f']
+    hlil = hexasm.hlil(f)
+    self.assertNotIn('return 0xc', hlil)
+    self.assertIn('return 5 + R2', hlil)
+
+  def test_r6_is_not_an_argument(self):
+    f = self.analyse('''
+f:
+  { r0 = add(r0, r6) }
+  { jumpr r31 }
+''')['f']
+    # BN still sees R6 read, but outside the convention's argument list.
+    self.assertIn('(int32_t arg1, int32_t arg2 @ R6)', str(f.type))
+
+
 if __name__ == '__main__':
   unittest.main()

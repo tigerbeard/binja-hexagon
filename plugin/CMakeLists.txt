@@ -77,6 +77,7 @@ add_library(plugin_lib
   ${INSN_TEXT_FUNCS_CC}
   ${IL_FUNCS_CC}
   decoder.cc
+  hw_loops.cc
   il_util.cc
   insn_util.cc
   packet_context.cc

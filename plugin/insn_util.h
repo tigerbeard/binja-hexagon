@@ -44,3 +44,5 @@ bool IsCondJump(const Insn &insn);
 // A return: dealloc_return and its forms, or `jumpr r31`, conditional or not.
 bool IsReturn(const Insn &insn);
 bool IsSystem(const Insn &insn);
+// The endloop pseudo-instruction the decoder adds to a packet ending a loop.
+bool IsLoopEnd(const Insn &insn);

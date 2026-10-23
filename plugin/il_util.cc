@@ -21,6 +21,7 @@
 #include "binaryninjaapi.h"
 #include "glog/logging.h"
 #include "plugin/hex_regs.h"
+#include "plugin/hw_loops.h"
 #include "plugin/insn_util.h"
 #include "plugin/packet_context.h"
 #include "plugin/status_macros.h"
@@ -55,6 +56,87 @@ absl::Status FillBnInstructionLowLevelImpl(Architecture *arch, uint64_t pc,
   }
   opcode_liftptr[insn.opcode](arch, pc, pkt, insn, insn_num, ctx);
   return absl::OkStatus();
+}
+
+// Jumps back to the start of the loop that |insn|, an endloop, closes. The
+// start address is constant, so Binary Ninja sees the loop's back edge.
+// endloop01 continues loop 0 if it has iterations left, otherwise loop 1; the
+// endloop lifter left the chosen start in |dest|.
+void LiftLoopJump(LowLevelILFunction &il, const Insn &insn,
+                  const LoopStarts &loop, uint32_t dest) {
+  if (insn.opcode == J2_endloop01 && loop.loop0 && loop.loop1) {
+    LowLevelILLabel to_loop0, to_loop1;
+    il.AddInstruction(il.If(il.CompareEqual(4, il.Register(4, dest),
+                                            il.ConstPointer(4, *loop.loop0)),
+                            to_loop0, to_loop1));
+    il.MarkLabel(to_loop0);
+    il.AddInstruction(il.Jump(il.ConstPointer(4, *loop.loop0)));
+    il.MarkLabel(to_loop1);
+    il.AddInstruction(il.Jump(il.ConstPointer(4, *loop.loop1)));
+  } else if (insn.opcode != J2_endloop1 && loop.loop0) {
+    il.AddInstruction(il.Jump(il.ConstPointer(4, *loop.loop0)));
+  } else if (insn.opcode != J2_endloop0 && loop.loop1) {
+    il.AddInstruction(il.Jump(il.ConstPointer(4, *loop.loop1)));
+  } else {
+    il.AddInstruction(il.Jump(il.Register(4, dest)));
+  }
+}
+
+// The loops |insn| ends, if it is an endloop of known loops that loopN set
+// up. Such a loop end lifts as a plain count-down (LiftPlainLoopEnd).
+const LoopStarts *PlainLoopEnd(const Insn &insn, uint64_t pc) {
+  if (!IsLoopEnd(insn)) {
+    return nullptr;
+  }
+  const LoopStarts *loop = CurrentLoopStarts(pc);
+  if (loop == nullptr) {
+    return nullptr;
+  }
+  const bool ends0 = insn.opcode != J2_endloop1;
+  const bool ends1 = insn.opcode != J2_endloop0;
+  if ((ends0 && (!loop->loop0 || loop->pipelined)) ||
+      (ends1 && !loop->loop1)) {
+    return nullptr;
+  }
+  return loop;
+}
+
+// Lifts the end of loops that loopN set up: while a loop's count is above
+// one, count it down and jump back to its start. endloop01 tries loop 0, then
+// loop 1. (spNloop0 loops also count down USR.LPCFG; their endloops go
+// through the generated lifters.)
+void LiftPlainLoopEnd(Architecture *arch, LowLevelILFunction &il,
+                      const Insn &insn, const LoopStarts &loop) {
+  auto count_down = [arch, &il](uint32_t lc, uint64_t start,
+                                LowLevelILLabel &otherwise) {
+    LowLevelILLabel again;
+    il.AddInstruction(il.If(il.CompareSignedGreaterThan(
+                                4, il.Register(4, lc), il.Const(4, 1)),
+                            again, otherwise));
+    il.MarkLabel(again);
+    il.AddInstruction(il.SetRegister(
+        4, lc, il.Sub(4, il.Register(4, lc), il.Const(4, 1))));
+    // Go to the loop start's label when the function has one. A constant
+    // jump would do for a single loop end, but endloop01 has two targets,
+    // and Binary Ninja gives each jump of the packet both of them.
+    if (BNLowLevelILLabel *label = il.GetLabelForAddress(arch, start)) {
+      il.AddInstruction(il.Goto(*label));
+    } else {
+      il.AddInstruction(il.Jump(il.ConstPointer(4, start)));
+    }
+  };
+  LowLevelILLabel next;
+  if (insn.opcode == J2_endloop01) {
+    LowLevelILLabel try_loop1;
+    count_down(HEX_REG_LC0, *loop.loop0, try_loop1);
+    il.MarkLabel(try_loop1);
+    count_down(HEX_REG_LC1, *loop.loop1, next);
+  } else if (insn.opcode == J2_endloop0) {
+    count_down(HEX_REG_LC0, *loop.loop0, next);
+  } else {
+    count_down(HEX_REG_LC1, *loop.loop1, next);
+  }
+  il.MarkLabel(next);
 }
 
 } // namespace
@@ -166,7 +248,7 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch, uint64_t pc,
   if (pkt.pkt_has_cof) {
     for (int i = 0; i < pkt.num_insns; i++) {
       const Insn &insn = pkt.insn[i];
-      if (!insn.part1 && IsCondJump(insn)) {
+      if (!insn.part1 && IsCondJump(insn) && !PlainLoopEnd(insn, pc)) {
         il.AddInstruction(
             il.SetRegister(1, BRANCH_TAKEN_ARRAY + i, il.Const(1, 0)));
       }
@@ -177,6 +259,9 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch, uint64_t pc,
   auto ctx = absl::make_unique<PacketContext>(il);
   for (int i = 0; i < pkt.num_insns; i++) {
     const Insn &insn = pkt.insn[i];
+    if (PlainLoopEnd(insn, pc)) {
+      continue; // Lifted with the packet's branches.
+    }
     RETURN_IF_ERROR(
         FillBnInstructionLowLevelImpl(arch, pc, pkt, insn, i, *ctx));
   }
@@ -193,6 +278,10 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch, uint64_t pc,
       if (insn.part1) {
         continue;
       }
+      if (const LoopStarts *loop = PlainLoopEnd(insn, pc)) {
+        LiftPlainLoopEnd(arch, il, insn, *loop);
+        continue;
+      }
       if (IsJump(insn) || IsCall(insn)) {
         LowLevelILLabel branch_case, next_insn;
         if (IsCondJump(insn)) {
@@ -203,8 +292,12 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch, uint64_t pc,
           il.MarkLabel(branch_case);
         }
         if (IsIndirect(insn) && IsJump(insn)) {
+          const LoopStarts *loop =
+              IsLoopEnd(insn) ? CurrentLoopStarts(pc) : nullptr;
           if (IsReturn(insn)) {
             il.AddInstruction(il.Return(il.Register(4, HEX_REG_LR)));
+          } else if (loop != nullptr) {
+            LiftLoopJump(il, insn, *loop, BRANCHR_DEST_ARRAY + i);
           } else {
             il.AddInstruction(il.Jump(il.Register(4, BRANCHR_DEST_ARRAY + i)));
           }

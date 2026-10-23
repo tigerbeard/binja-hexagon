@@ -20,6 +20,7 @@
 #include "glog/logging.h"
 #include "lowlevelilinstruction.h"
 #include "plugin/hex_regs.h"
+#include "plugin/hw_loops.h"
 #include "plugin/il_util.h"
 #include "plugin/insn_util.h"
 #include "plugin/intrinsics.h"
@@ -206,6 +207,21 @@ public:
     return true;
   }
 
+  // Function analysis and lifting run with the view's hardware loops
+  // published to the instruction callbacks (hw_loops.h), which call back on
+  // this thread.
+  void AnalyzeBasicBlocks(Function *function,
+                          BasicBlockAnalysisContext &context) override {
+    ScopedLoops loops(&LoopsForView(function->GetView().GetPtr()));
+    Architecture::DefaultAnalyzeBasicBlocks(function, context);
+  }
+
+  bool LiftFunction(LowLevelILFunction *function,
+                    FunctionLifterContext &context) override {
+    ScopedLoops loops(&LoopsForView(context.GetView().GetPtr()));
+    return Architecture::DefaultLiftFunction(function, context);
+  }
+
   std::vector<uint32_t> GetFullWidthRegisters() override {
     // TODO: add VRegs, QRegs.
     return std::vector<uint32_t>{
@@ -221,7 +237,7 @@ public:
         HEX_REG_C13, HEX_REG_C14, HEX_REG_C15, HEX_REG_C16, HEX_REG_C17,
         HEX_REG_C18, HEX_REG_C19, HEX_REG_C20, HEX_REG_C21, HEX_REG_C22,
         HEX_REG_C23, HEX_REG_C24, HEX_REG_C25, HEX_REG_C26, HEX_REG_C27,
-        HEX_REG_C28, HEX_REG_C29, HEX_REG_C30, HEX_REG_C31,
+        HEX_REG_C28, HEX_REG_C29, HEX_REG_C30, HEX_REG_C31, HEX_REG_USR_LPCFG,
     };
   }
 
@@ -276,8 +292,10 @@ public:
     case HEX_REG_P3:
       return BNRegisterInfo{HEX_REG_P3_0, 3, 1, NoExtend};
     case HEX_REG_USR_LPCFG:
-      DCHECK_EQ(reg_field_info[REG_FIELD_USR_LPCFG].offset, 8);
-      return BNRegisterInfo{HEX_REG_USR, 1, 1, NoExtend};
+      // USR.LPCFG (bits 9:8) is its own register rather than a part of USR:
+      // Binary Ninja's constant propagation does not follow a sub-register
+      // above offset 0, and hardware loops read LPCFG on every iteration.
+      return BNRegisterInfo{HEX_REG_USR_LPCFG, 0, 1, NoExtend};
     case HEX_REG_R00 ... HEX_REG_R31:
       return BNRegisterInfo{reg, 0, 4, NoExtend};
     case HEX_REG_C00 ... HEX_REG_C31:

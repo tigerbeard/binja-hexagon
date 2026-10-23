@@ -22,6 +22,7 @@
 #include "absl/strings/str_cat.h"
 #include "glog/logging.h"
 #include "plugin/hex_regs.h"
+#include "plugin/hw_loops.h"
 #include "plugin/status_macros.h"
 
 // Defined in insn_text_funcs_generated.cc.
@@ -82,6 +83,10 @@ bool IsReturn(const Insn &insn) {
   return target != nullptr && insn.regno[target - info] == HEX_REG_LR;
 }
 bool IsSystem(const Insn &insn) { return GET_ATTRIB(insn.opcode, A_BN_SYSTEM); }
+bool IsLoopEnd(const Insn &insn) {
+  return insn.opcode == J2_endloop0 || insn.opcode == J2_endloop1 ||
+         insn.opcode == J2_endloop01;
+}
 
 absl::Status FillBnInstructionInfo(uint64_t pc, const Packet &pkt,
                                    BinaryNinja::InstructionInfo &result) {
@@ -98,6 +103,20 @@ absl::Status FillBnInstructionInfo(uint64_t pc, const Packet &pkt,
     has_ucj |= IsJump(insn) && !IsIndirect(insn) && !IsCondJump(insn);
   }
 
+  // A packet that ends a hardware loop jumps back to the loop's start while
+  // the loop count lasts. The start comes from the loops of the function
+  // being analysed (hw_loops.h); without them the packet reports no branch.
+  if (pkt.pkt_has_endloop) {
+    if (const LoopStarts *starts = CurrentLoopStarts(pc)) {
+      if (starts->loop0) {
+        result.AddBranch(TrueBranch, *starts->loop0);
+      }
+      if (starts->loop1) {
+        result.AddBranch(TrueBranch, *starts->loop1);
+      }
+      result.AddBranch(FalseBranch, pc + pkt.encod_pkt_size_in_bytes);
+    }
+  }
   for (int i = 0; i < pkt.num_insns; i++) {
     const Insn &insn = pkt.insn[i];
     if (IsReturn(insn)) {

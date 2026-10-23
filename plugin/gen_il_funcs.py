@@ -1074,21 +1074,21 @@ class SemanticsTreeTransformer(Transformer):
     # #define fWRITE_FP(A) WRITE_RREG(HEX_REG_FP, A)
     assert (len(args) == 1)
     a = self.lift_operand(args[0])
-    return [IlSetRegister(4, 'HEX_REG_FP', a)]
+    return [IlSetRegister(4, 'HEX_REG_FP', fit_to_size(4, a))]
 
   def macro_stmt_fWRITE_LR(self, args):
     # macros.h:
     # #define fWRITE_LR(A) WRITE_RREG(HEX_REG_LR, A)
     assert (len(args) == 1)
     a = self.lift_operand(args[0])
-    return [IlSetRegister(4, 'HEX_REG_LR', a)]
+    return [IlSetRegister(4, 'HEX_REG_LR', fit_to_size(4, a))]
 
   def macro_stmt_fWRITE_SP(self, args):
     # macros.h:
     # #define fWRITE_SP(A) WRITE_RREG(HEX_REG_SP, A)
     assert (len(args) == 1)
     a = self.lift_operand(args[0])
-    return [IlSetRegister(4, 'HEX_REG_SP', a)]
+    return [IlSetRegister(4, 'HEX_REG_SP', fit_to_size(4, a))]
 
   def macro_stmt_fWRITE_P0(self, args):
     # macros.h:
@@ -1793,6 +1793,14 @@ class SemanticsTreeTransformer(Transformer):
   @v_args(inline=False)
   def unexpected(self, args):
     raise ValueError('Unexpected grammar rule in insn semantics')
+
+
+def fit_to_size(size, expr):
+  # A register write takes a value of the register's size. Word extracts
+  # (fGETWORD) lift as sign-extended 8-byte values.
+  if getattr(expr, 'size', size) > size:
+    return IlLowPart(size, expr)
+  return expr
 
 
 def is_predicate_dest(reg):

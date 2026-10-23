@@ -620,8 +620,8 @@ if (P0) callr R0 }
 5: if (temp90.b) then 6 else 13
 6: temp301.q = [temp300.d].q
 7: temp301.q = temp301.q
-8: LR = sx.q((temp301.q s>> 0x20).d)
-9: FP = sx.q(temp301.q.d)
+8: LR = (sx.q((temp301.q s>> 0x20).d)).d
+9: FP = (sx.q(temp301.q.d)).d
 10: SP = temp300.d + 8
 11: temp313.b = 1
 12: goto 13

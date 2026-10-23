@@ -1153,10 +1153,41 @@ f:
 
 
 @unittest.skipUnless(qemu_oracle.available(), 'needs qemu-system-hexagon')
+class TestQemuCases(SnippetTest):
+  # The cases qemu_diff.py runs: only instructions QEMU's CPU has, and no
+  # words that write one register twice (undefined; QEMU 11.1 keeps the
+  # loaded value of r9 = memb(r9++#1), Qualcomm's QEMU the address).
+
+  def setUp(self):
+    import qemu_diff
+    self.qemu_diff = qemu_diff
+    namespace = {}
+    with open(llvm_diff.DEFAULT_ISET) as f:
+      exec(f.read(), namespace)
+    self.iset = namespace['iset']
+
+  def test_words_that_write_a_register_twice(self):
+    writes_twice = self.qemu_diff.writes_a_register_twice
+    load, pair_load = self.iset['L2_loadri_pi'], self.iset['L2_loadrd_pi']
+    self.assertTrue(writes_twice(load, 0x9b89c029))  # r9 = memw(r9++#4)
+    self.assertFalse(writes_twice(load, 0x9b89c02a))  # r10 = memw(r9++#4)
+    self.assertTrue(writes_twice(pair_load, 0x9bc5c024))  # r5:4, r5++
+    self.assertFalse(writes_twice(pair_load, 0x9bc6c024))  # r5:4, r6++
+    self.assertFalse(writes_twice(self.iset['A2_add'], 0xf301c101))
+
+  def test_instructions_newer_than_the_cpu_are_left_out(self):
+    attribs = self.qemu_diff.op_attribs()
+    testable = self.qemu_diff.testable
+    self.assertFalse(testable('S2_storeri_pi_nt', attribs, self.iset, 73))
+    self.assertTrue(testable('S2_storeri_pi_nt', attribs, self.iset, 79))
+    self.assertFalse(testable('A2_nop_rb', attribs, self.iset, 81))
+    self.assertTrue(testable('A2_nop_rb', attribs, self.iset, 85))
+
+
 class TestAgainstQemu(SnippetTest):
-  # Every lifted instruction that qemu_diff.py can run (no branches, memory,
-  # system or HVX instructions) agrees with QEMU on random encodings and
-  # registers. This found lifts that a 32-bit literal or mask broke:
+  # Every lifted instruction that qemu_diff.py can run on QEMU's CPU (no
+  # branches, system or HVX instructions) agrees with QEMU on random
+  # encodings and registers. This found lifts that a 32-bit literal or mask broke:
   # mpy(Rs,Rt):rnd, extract(u) on pairs and vspliceb.
 
   def test_lifted_instructions_match_qemu(self):

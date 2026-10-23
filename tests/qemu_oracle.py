@@ -23,10 +23,13 @@ RAM directly. Code goes into RAM at CODE_ADDR,
 or the address given, and runs from there; the registers named in the result are the general
 registers r0-r31, the predicates p0-p3, m0, m1 and usr.
 
-Set QEMU_HEXAGON to the qemu-system-hexagon binary if it is not on PATH.
+Set QEMU_HEXAGON to the qemu-system-hexagon binary if it is not on PATH. The
+CPU is QEMU_HEXAGON_CPU (e.g. v73), or else the newest the binary has.
 """
 
+import functools
 import os
+import re
 import shutil
 import socket
 import struct
@@ -34,7 +37,6 @@ import subprocess
 import time
 
 QEMU = os.environ.get('QEMU_HEXAGON', 'qemu-system-hexagon')
-CPU = 'v73'
 CODE_ADDR = 0x1000
 
 # Register numbers in QEMU's target description (hexagon-core.xml): r0-r31,
@@ -52,6 +54,22 @@ def available():
   return shutil.which(QEMU) is not None
 
 
+@functools.lru_cache()
+def cpu():
+  """The CPU to run: QEMU_HEXAGON_CPU, or the newest QEMU lists."""
+  if os.environ.get('QEMU_HEXAGON_CPU'):
+    return os.environ['QEMU_HEXAGON_CPU']
+  listed = subprocess.run([QEMU, '-cpu', 'help'], capture_output=True,
+                          text=True, check=True).stdout
+  return max(re.findall(r'^\s*(v\d+)\s*$', listed, re.M),
+             key=lambda name: version(name))
+
+
+def version(name=None):
+  """A CPU's version as tests/isa_versions.py numbers them: v73 is 73."""
+  return int((name or cpu()).lstrip('v'))
+
+
 class Qemu:
 
   def __init__(self):
@@ -59,7 +77,7 @@ class Qemu:
       probe.bind(('127.0.0.1', 0))
       self.port = probe.getsockname()[1]
     self.proc = subprocess.Popen(
-        [QEMU, '-M', 'virt', '-cpu', CPU, '-nographic', '-S', '-gdb',
+        [QEMU, '-M', 'virt', '-cpu', cpu(), '-nographic', '-S', '-gdb',
          'tcp:127.0.0.1:%d' % self.port, '-monitor', 'none', '-serial',
          'none'],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

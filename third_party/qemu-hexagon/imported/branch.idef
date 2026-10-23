@@ -1,5 +1,5 @@
 /*
- *  Copyright(c) 2019-2020 Qualcomm Innovation Center, Inc. All Rights Reserved.
+ *  Copyright(c) 2019-2023 Qualcomm Innovation Center, Inc. All Rights Reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -34,16 +34,19 @@ Q6INSN(J2_jump,"jump #r22:2",ATTRIBS(A_JDIR), "direct unconditional jump",
 Q6INSN(J2_jumpr,"jumpr Rs32",ATTRIBS(A_JINDIR), "indirect unconditional jump",
 {fJUMPR(RsN,RsV,COF_TYPE_JUMPR);})
 
+Q6INSN(J2_jumprh,"jumprh Rs32",ATTRIBS(A_JINDIR, A_HINTED_COF), "indirect unconditional jump",
+{fJUMPR(RsN,RsV,COF_TYPE_JUMPR);})
+
 #define OLDCOND_JUMP(TAG,OPER,OPER2,ATTRIB,DESCR,SEMANTICS) \
 Q6INSN(TAG##t,"if (Pu4) "OPER":nt "OPER2,ATTRIB,DESCR,{fBRANCH_SPECULATE_STALL(fLSBOLD(PuV),,SPECULATE_NOT_TAKEN,12,0); if (fLSBOLD(PuV)) { SEMANTICS; }}) \
 Q6INSN(TAG##f,"if (!Pu4) "OPER":nt "OPER2,ATTRIB,DESCR,{fBRANCH_SPECULATE_STALL(fLSBOLDNOT(PuV),,SPECULATE_NOT_TAKEN,12,0); if (fLSBOLDNOT(PuV)) { SEMANTICS; }}) \
 Q6INSN(TAG##tpt,"if (Pu4) "OPER":t "OPER2,ATTRIB,DESCR,{fBRANCH_SPECULATE_STALL(fLSBOLD(PuV),,SPECULATE_TAKEN,12,0); if (fLSBOLD(PuV)) { SEMANTICS; }}) \
 Q6INSN(TAG##fpt,"if (!Pu4) "OPER":t "OPER2,ATTRIB,DESCR,{fBRANCH_SPECULATE_STALL(fLSBOLDNOT(PuV),,SPECULATE_TAKEN,12,0); if (fLSBOLDNOT(PuV)) { SEMANTICS; }})
 
-OLDCOND_JUMP(J2_jump,"jump","#r15:2",ATTRIBS(A_CJOLDDIR,A_BN_COND_J),"direct conditional jump",
+OLDCOND_JUMP(J2_jump,"jump","#r15:2",ATTRIBS(A_CJOLDDIR),"direct conditional jump",
 fIMMEXT(riV);fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);)
 
-OLDCOND_JUMP(J2_jumpr,"jumpr","Rs32",ATTRIBS(A_JINDIROLD,A_BN_COND_J),"indirect conditional jump",
+OLDCOND_JUMP(J2_jumpr,"jumpr","Rs32",ATTRIBS(A_JINDIROLD),"indirect conditional jump",
 fJUMPR(RsN,RsV,COF_TYPE_JUMPR);)
 
 #define NEWCOND_JUMP(TAG,OPER,OPER2,ATTRIB,DESCR,SEMANTICS)\
@@ -52,10 +55,10 @@ Q6INSN(TAG##fnew,"if (!Pu4.new) "OPER":nt "OPER2,ATTRIB,DESCR,{fBRANCH_SPECULATE
 Q6INSN(TAG##tnewpt,"if (Pu4.new) "OPER":t "OPER2,ATTRIB,DESCR,{fBRANCH_SPECULATE_STALL(fLSBNEW(PuN),, SPECULATE_TAKEN , 12,0)} {if(fLSBNEW(PuN)){SEMANTICS;}})\
 Q6INSN(TAG##fnewpt,"if (!Pu4.new) "OPER":t "OPER2,ATTRIB,DESCR,{fBRANCH_SPECULATE_STALL(fLSBNEWNOT(PuN),, SPECULATE_TAKEN , 12,0)} {if(fLSBNEWNOT(PuN)){SEMANTICS;}})
 
-NEWCOND_JUMP(J2_jump,"jump","#r15:2",ATTRIBS(A_CJNEWDIR,A_ARCHV2,A_BN_COND_J),"direct conditional jump",
+NEWCOND_JUMP(J2_jump,"jump","#r15:2",ATTRIBS(A_CJNEWDIR,A_ARCHV2),"direct conditional jump",
 fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMPNEW);)
 
-NEWCOND_JUMP(J2_jumpr,"jumpr","Rs32",ATTRIBS(A_JINDIRNEW,A_ARCHV3,A_BN_COND_J),"indirect conditional jump",
+NEWCOND_JUMP(J2_jumpr,"jumpr","Rs32",ATTRIBS(A_JINDIRNEW,A_ARCHV3),"indirect conditional jump",
 fJUMPR(RsN,RsV,COF_TYPE_JUMPR);)
 
 
@@ -67,28 +70,28 @@ Q6INSN(J4_hintjumpr,"hintjr(Rs32)",ATTRIBS(A_JINDIR),"hint indirect conditional 
 /*********************************************/
 /* Compound Compare-Jumps                    */
 /*********************************************/
-Q6INSN(J2_jumprz,"if (Rs32!=#0) jump:nt #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3,A_BN_COND_J),"direct conditional jump if register true",
+Q6INSN(J2_jumprz,"if (Rs32!=#0) jump:nt #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3),"direct conditional jump if register true",
 {fBRANCH_SPECULATE_STALL((RsV!=0), , SPECULATE_NOT_TAKEN,12,0) if (RsV != 0) { fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
 
-Q6INSN(J2_jumprnz,"if (Rs32==#0) jump:nt #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3,A_BN_COND_J),"direct conditional jump if register false",
+Q6INSN(J2_jumprnz,"if (Rs32==#0) jump:nt #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3),"direct conditional jump if register false",
 {fBRANCH_SPECULATE_STALL((RsV==0), , SPECULATE_NOT_TAKEN,12,0) if (RsV == 0) {fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
 
-Q6INSN(J2_jumprzpt,"if (Rs32!=#0) jump:t #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3,A_BN_COND_J),"direct conditional jump if register true",
+Q6INSN(J2_jumprzpt,"if (Rs32!=#0) jump:t #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3),"direct conditional jump if register true",
 {fBRANCH_SPECULATE_STALL((RsV!=0), , SPECULATE_TAKEN,12,0) if (RsV != 0) { fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
 
-Q6INSN(J2_jumprnzpt,"if (Rs32==#0) jump:t #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3,A_BN_COND_J),"direct conditional jump if register false",
+Q6INSN(J2_jumprnzpt,"if (Rs32==#0) jump:t #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3),"direct conditional jump if register false",
 {fBRANCH_SPECULATE_STALL((RsV==0), , SPECULATE_TAKEN,12,0) if (RsV == 0) {fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
 
-Q6INSN(J2_jumprgtez,"if (Rs32>=#0) jump:nt #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3,A_BN_COND_J),"direct conditional jump if register greater or equal to zero",
+Q6INSN(J2_jumprgtez,"if (Rs32>=#0) jump:nt #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3),"direct conditional jump if register greater or equal to zero",
 {fBRANCH_SPECULATE_STALL((RsV>=0), , SPECULATE_NOT_TAKEN,12,0) if (RsV>=0) { fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
 
-Q6INSN(J2_jumprgtezpt,"if (Rs32>=#0) jump:t #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3,A_BN_COND_J),"direct conditional jump if register greater or equal to zero",
+Q6INSN(J2_jumprgtezpt,"if (Rs32>=#0) jump:t #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3),"direct conditional jump if register greater or equal to zero",
 {fBRANCH_SPECULATE_STALL((RsV>=0), , SPECULATE_TAKEN,12,0) if (RsV>=0) { fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
 
-Q6INSN(J2_jumprltez,"if (Rs32<=#0) jump:nt #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3,A_BN_COND_J),"direct conditional jump if register less than or equal to zero",
+Q6INSN(J2_jumprltez,"if (Rs32<=#0) jump:nt #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3),"direct conditional jump if register less than or equal to zero",
 {fBRANCH_SPECULATE_STALL((RsV<=0), , SPECULATE_NOT_TAKEN,12,0) if (RsV<=0) { fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
 
-Q6INSN(J2_jumprltezpt,"if (Rs32<=#0) jump:t #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3,A_BN_COND_J),"direct conditional jump if register less than or equal to zero",
+Q6INSN(J2_jumprltezpt,"if (Rs32<=#0) jump:t #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3),"direct conditional jump if register less than or equal to zero",
 {fBRANCH_SPECULATE_STALL((RsV<=0), , SPECULATE_TAKEN,12,0) if (RsV<=0) { fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
 
 
@@ -100,14 +103,14 @@ Q6INSN(J2_jumprltezpt,"if (Rs32<=#0) jump:t #r13:2",ATTRIBS(A_CJNEWDIR,A_ARCHV3,
 
 /* V4 compound compare jumps (CJ) */
 #define STD_CMPJUMP(TAG,TST,TSTSEM)\
-Q6INSN(J4_##TAG##_tp0_jump_nt, "p0="TST"; if (p0.new) jump:nt #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP,A_BN_COND_J),"compound compare-jump", {fPART1(fWRITE_P0(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW0,,SPECULATE_NOT_TAKEN,13,0)  if (fLSBNEW0) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
-Q6INSN(J4_##TAG##_fp0_jump_nt, "p0="TST"; if (!p0.new) jump:nt #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP,A_BN_COND_J),"compound compare-jump",{fPART1(fWRITE_P0(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW0NOT,,SPECULATE_NOT_TAKEN,13,0) if (fLSBNEW0NOT) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
-Q6INSN(J4_##TAG##_tp0_jump_t,  "p0="TST"; if (p0.new) jump:t #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP,A_BN_COND_J),"compound compare-jump",  {fPART1(fWRITE_P0(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW0,,SPECULATE_TAKEN,13,0)      if (fLSBNEW0) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
-Q6INSN(J4_##TAG##_fp0_jump_t,  "p0="TST"; if (!p0.new) jump:t #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP,A_BN_COND_J),"compound compare-jump", {fPART1(fWRITE_P0(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW0NOT,,SPECULATE_TAKEN,13,0)     if (fLSBNEW0NOT) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
-Q6INSN(J4_##TAG##_tp1_jump_nt, "p1="TST"; if (p1.new) jump:nt #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP,A_BN_COND_J),"compound compare-jump", {fPART1(fWRITE_P1(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW1,,SPECULATE_NOT_TAKEN,13,0)  if (fLSBNEW1) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
-Q6INSN(J4_##TAG##_fp1_jump_nt, "p1="TST"; if (!p1.new) jump:nt #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP,A_BN_COND_J),"compound compare-jump",{fPART1(fWRITE_P1(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW1NOT,,SPECULATE_NOT_TAKEN,13,0) if (fLSBNEW1NOT) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
-Q6INSN(J4_##TAG##_tp1_jump_t,  "p1="TST"; if (p1.new) jump:t #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP,A_BN_COND_J),"compound compare-jump",  {fPART1(fWRITE_P1(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW1,,SPECULATE_TAKEN,13,0)      if (fLSBNEW1) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
-Q6INSN(J4_##TAG##_fp1_jump_t,  "p1="TST"; if (!p1.new) jump:t #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP,A_BN_COND_J),"compound compare-jump", {fPART1(fWRITE_P1(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW1NOT,,SPECULATE_TAKEN,13,0)     if (fLSBNEW1NOT) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
+Q6INSN(J4_##TAG##_tp0_jump_nt, "p0="TST"; if (p0.new) jump:nt #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP),"compound compare-jump", {fPART1(fWRITE_P0(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW0,,SPECULATE_NOT_TAKEN,13,0)  if (fLSBNEW0) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
+Q6INSN(J4_##TAG##_fp0_jump_nt, "p0="TST"; if (!p0.new) jump:nt #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP),"compound compare-jump",{fPART1(fWRITE_P0(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW0NOT,,SPECULATE_NOT_TAKEN,13,0) if (fLSBNEW0NOT) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
+Q6INSN(J4_##TAG##_tp0_jump_t,  "p0="TST"; if (p0.new) jump:t #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP),"compound compare-jump",  {fPART1(fWRITE_P0(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW0,,SPECULATE_TAKEN,13,0)      if (fLSBNEW0) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
+Q6INSN(J4_##TAG##_fp0_jump_t,  "p0="TST"; if (!p0.new) jump:t #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP),"compound compare-jump", {fPART1(fWRITE_P0(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW0NOT,,SPECULATE_TAKEN,13,0)     if (fLSBNEW0NOT) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
+Q6INSN(J4_##TAG##_tp1_jump_nt, "p1="TST"; if (p1.new) jump:nt #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP),"compound compare-jump", {fPART1(fWRITE_P1(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW1,,SPECULATE_NOT_TAKEN,13,0)  if (fLSBNEW1) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
+Q6INSN(J4_##TAG##_fp1_jump_nt, "p1="TST"; if (!p1.new) jump:nt #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP),"compound compare-jump",{fPART1(fWRITE_P1(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW1NOT,,SPECULATE_NOT_TAKEN,13,0) if (fLSBNEW1NOT) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
+Q6INSN(J4_##TAG##_tp1_jump_t,  "p1="TST"; if (p1.new) jump:t #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP),"compound compare-jump",  {fPART1(fWRITE_P1(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW1,,SPECULATE_TAKEN,13,0)      if (fLSBNEW1) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
+Q6INSN(J4_##TAG##_fp1_jump_t,  "p1="TST"; if (!p1.new) jump:t #r9:2", ATTRIBS(A_CJNEWDIR,A_NEWCMPJUMP),"compound compare-jump", {fPART1(fWRITE_P1(f8BITSOF(TSTSEM)))  fBRANCH_SPECULATE_STALL(fLSBNEW1NOT,,SPECULATE_TAKEN,13,0)     if (fLSBNEW1NOT) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
 
 
 STD_CMPJUMP(cmpeqi,"cmp.eq(Rs16,#U5)",(RsV==UiV))
@@ -134,8 +137,8 @@ Q6INSN(J4_jumpsetr,"Rd16=Rs16 ; jump #r9:2",ATTRIBS(A_JDIR), "direct uncondition
 
 /* V4 new-value jumps (NCJ) */
 #define STD_CMPJUMPNEWRS(TAG,TST,TSTSEM)\
-Q6INSN(J4_##TAG##_jumpnv_t, "if ("TST") jump:t #r9:2", ATTRIBS(A_NEWVALUEJ,A_BN_COND_J),"compound compare-jump",{fBRANCH_SPECULATE_STALL(TSTSEM,,SPECULATE_TAKEN,13,0);if (TSTSEM) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
-Q6INSN(J4_##TAG##_jumpnv_nt,"if ("TST") jump:nt #r9:2",ATTRIBS(A_NEWVALUEJ,A_BN_COND_J),"compound compare-jump",{fBRANCH_SPECULATE_STALL(TSTSEM,,SPECULATE_NOT_TAKEN,13,0); if (TSTSEM) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
+Q6INSN(J4_##TAG##_jumpnv_t, "if ("TST") jump:t #r9:2", ATTRIBS(A_NEWVALUEJ),"compound compare-jump",{fBRANCH_SPECULATE_STALL(TSTSEM,,SPECULATE_TAKEN,13,0);if (TSTSEM) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})\
+Q6INSN(J4_##TAG##_jumpnv_nt,"if ("TST") jump:nt #r9:2",ATTRIBS(A_NEWVALUEJ),"compound compare-jump",{fBRANCH_SPECULATE_STALL(TSTSEM,,SPECULATE_NOT_TAKEN,13,0); if (TSTSEM) {fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}})
 
 
 
@@ -181,21 +184,23 @@ STD_CMPJUMPNEWRS(cmpltu_f,"!cmp.gtu(Rt32,Ns8.new)",!(fCAST4u(RtV)>fCAST4u(fNEWRE
 Q6INSN(J2_call,"call #r22:2",ATTRIBS(CDIR_STD), "direct unconditional call",
 {fIMMEXT(riV); fPCALIGN(riV); fCALL(fREAD_PC()+riV); })
 
-Q6INSN(J2_callt,"if (Pu4) call #r15:2",ATTRIBS(CDIR_STD, A_BN_COND_J),"direct conditional call if true",
+Q6INSN(J2_callt,"if (Pu4) call #r15:2",ATTRIBS(CDIR_STD),"direct conditional call if true",
 {fIMMEXT(riV); fPCALIGN(riV); fBRANCH_SPECULATE_STALL(fLSBOLD(PuV),,SPECULATE_NOT_TAKEN,12,0); if (fLSBOLD(PuV)) { fCALL(fREAD_PC()+riV); }})
 
-Q6INSN(J2_callf,"if (!Pu4) call #r15:2",ATTRIBS(CDIR_STD, A_BN_COND_J),"direct conditional call if false",
+Q6INSN(J2_callf,"if (!Pu4) call #r15:2",ATTRIBS(CDIR_STD),"direct conditional call if false",
 {fIMMEXT(riV); fPCALIGN(riV); fBRANCH_SPECULATE_STALL(fLSBOLDNOT(PuV),,SPECULATE_NOT_TAKEN,12,0);if (fLSBOLDNOT(PuV)) { fCALL(fREAD_PC()+riV); }})
 
 Q6INSN(J2_callr,"callr Rs32",ATTRIBS(CINDIR_STD), "indirect unconditional call",
 { fCALLR(RsV); })
 
-Q6INSN(J2_callrt,"if (Pu4) callr Rs32",ATTRIBS(CINDIR_STD, A_BN_COND_J),"indirect conditional call if true",
+Q6INSN(J2_callrt,"if (Pu4) callr Rs32",ATTRIBS(CINDIR_STD),"indirect conditional call if true",
 {fBRANCH_SPECULATE_STALL(fLSBOLD(PuV),,SPECULATE_NOT_TAKEN,12,0);if (fLSBOLD(PuV)) { fCALLR(RsV); }})
 
-Q6INSN(J2_callrf,"if (!Pu4) callr Rs32",ATTRIBS(CINDIR_STD, A_BN_COND_J),"indirect conditional call if false",
+Q6INSN(J2_callrf,"if (!Pu4) callr Rs32",ATTRIBS(CINDIR_STD),"indirect conditional call if false",
 {fBRANCH_SPECULATE_STALL(fLSBOLDNOT(PuV),,SPECULATE_NOT_TAKEN,12,0);if (fLSBOLDNOT(PuV)) { fCALLR(RsV); }})
 
+Q6INSN(J2_callrh,"callrh Rs32",ATTRIBS(CINDIR_STD, A_HINTED_COF), "hinted indirect unconditional call",
+{ fCALLR(RsV); })
 
 
 
@@ -267,7 +272,7 @@ Q6INSN(J2_ploop3si,"p3=sp3loop0(#r7:2,#U10)",ATTRIBS(A_ARCHV2),"Initialize HW lo
 
 
 
-Q6INSN(J2_endloop01,"endloop01",ATTRIBS(A_HWLOOP0_END,A_HWLOOP1_END,A_JUMP,A_INDIRECT,A_BN_COND_J),"Loopend for inner and outer loop",
+Q6INSN(J2_endloop01,"endloop01",ATTRIBS(A_HWLOOP0_END,A_HWLOOP1_END),"Loopend for inner and outer loop",
 {
 
   /* V2: With predicate control */
@@ -295,7 +300,7 @@ Q6INSN(J2_endloop01,"endloop01",ATTRIBS(A_HWLOOP0_END,A_HWLOOP1_END,A_JUMP,A_IND
 
 })
 
-Q6INSN(J2_endloop0,"endloop0",ATTRIBS(A_HWLOOP0_END,A_JUMP,A_INDIRECT,A_BN_COND_J),"Loopend for inner loop",
+Q6INSN(J2_endloop0,"endloop0",ATTRIBS(A_HWLOOP0_END),"Loopend for inner loop",
 {
 
   /* V2: With predicate control */
@@ -315,7 +320,7 @@ Q6INSN(J2_endloop0,"endloop0",ATTRIBS(A_HWLOOP0_END,A_JUMP,A_INDIRECT,A_BN_COND_
   }
 })
 
-Q6INSN(J2_endloop1,"endloop1",ATTRIBS(A_HWLOOP1_END,A_JUMP,A_INDIRECT,A_BN_COND_J),"Loopend for outer loop",
+Q6INSN(J2_endloop1,"endloop1",ATTRIBS(A_HWLOOP1_END),"Loopend for outer loop",
 {
   /* check if iterate */
   if (fREAD_LC1>1) {

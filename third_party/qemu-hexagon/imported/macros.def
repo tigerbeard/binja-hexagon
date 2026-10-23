@@ -1,5 +1,5 @@
 /*
- *  Copyright(c) 2019-2020 Qualcomm Innovation Center, Inc. All Rights Reserved.
+ *  Copyright(c) 2019-2021 Qualcomm Innovation Center, Inc. All Rights Reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -347,7 +347,6 @@ DEF_MACRO(
     ()
 )
 
-
 DEF_MACRO(
     fREAD_LR, /* read link register */
     (READ_RREG(REG_LR)),          /* behavior */
@@ -496,7 +495,6 @@ DEF_MACRO(
     (A_COF)
 )
 
-
 DEF_MACRO(
     fBRANCH,
     fWRITE_NPC(LOC); fCOF_CALLBACK(LOC,TYPE),
@@ -601,6 +599,11 @@ DEF_MACRO(
     fWRITE_P3, /* write Predicate 0 */
     WRITE_PREG(3,VAL),     /* behavior */
     (A_IMPLICIT_WRITES_P3)
+)
+DEF_MACRO(
+	fWRITE_P3_LATE, /* write Predicate 0 */
+	{WRITE_PREG(3,VAL); fHIDE(MARK_LATE_PRED_WRITE(3))} ,          /* behavior */
+	(A_IMPLICIT_WRITES_P3,A_RESTRICT_LATEPRED)
 )
 
 DEF_MACRO(
@@ -935,7 +938,7 @@ DEF_MACRO(
 )
 
 DEF_MACRO(
-    fEA_GPI, /* Calculate EA with Global Poitner + Immediate */
+    fEA_GPI, /* Calculate EA with Global Pointer + Immediate */
     do { EA=fREAD_GP()+IMM; fGP_DOCHKPAGECROSS(fREAD_GP(),EA); } while (0),
     ()
 )
@@ -1165,18 +1168,6 @@ DEF_MACRO(
 )
 
 DEF_MACRO(
-    fSF_RECIP_LOOKUP,
-    arch_recip_lookup(IDX),
-    ()
-)
-
-DEF_MACRO(
-    fSF_INVSQRT_LOOKUP,
-    arch_invsqrt_lookup(IDX),
-    ()
-)
-
-DEF_MACRO(
     fSF_MUL_POW2,
     (fUNFLOAT(fFLOAT(A) * fFLOAT((fSF_BIAS() + (B)) << fSF_MANTBITS()))),
     ()
@@ -1378,17 +1369,6 @@ DEF_MACRO(
 /* Load/Store support                */
 /*************************************/
 
-DEF_MACRO(fcirc_add,
-    (REG=fcircadd(thread, REG,INCR,IMMED, fREAD_CSREG(MuN))),
-    ()
-)
-
-DEF_MACRO(fbrev,
-    (fbrevaddr(REG)),
-    ()
-)
-
-
 DEF_MACRO(fLOAD,
     { DST = (size##SIZE##SIGN##_t)MEM_LOAD##SIZE(thread,EA,insn); },
     (A_LOAD,A_MEMLIKE)
@@ -1589,7 +1569,7 @@ DEF_MACRO(fECHO,
 /********************************************/
 
 DEF_MACRO(RUNNABLE_THREADS_MAX,
-    (thread->processor_ptr->runnable_threads_max),
+    /* */,
     ()
 )
 
@@ -1606,37 +1586,23 @@ DEF_MACRO(THREAD_EN_MASK,
 
 
 DEF_MACRO(READ_IMASK,
-    (((TH) >= (thread->processor_ptr->runnable_threads_max)) ? 0 : (thread->processor_ptr->thread[TH]->Regs[REG_IMASK])),
+    /* */,
     ()
 )
 DEF_MACRO(WRITE_IMASK,
-    if ((TH) < (thread->processor_ptr->runnable_threads_max)) { thread->processor_ptr->thread[TH]->Regs[REG_IMASK]=(VAL & reg_mutability[REG_IMASK] ); },
+    /* */,
     (A_IMPLICIT_WRITES_IMASK_ANYTHREAD)
 )
 
 
 DEF_MACRO(WRITE_PRIO,
-    {
-        if ((TH) < (thread->processor_ptr->runnable_threads_max)) {
-            size4u_t tid_reg = thread->processor_ptr->thread[TH]->Regs[REG_TID];
-            fINSERT_BITS(tid_reg, reg_field_info[STID_PRIO].width, reg_field_info[STID_PRIO].offset, VAL);
-            LOG_OTHER_THREAD_REG_WRITE(thread,REG_TID,tid_reg,TH);
-        }
-    },
+    /* */,
     (A_IMPLICIT_WRITES_STID_PRIO_ANYTHREAD)
 )
 
 
 DEF_MACRO(DO_IASSIGNW,
-    {
-        int i;
-        int intbitpos = ((REG>>16)&0xF);
-        for (i=0;i<RUNNABLE_THREADS_MAX;i++) {
-            if(( (thread->processor_ptr->arch_proc_options->thread_enable_mask>>i) & 0x1)) {
-                fINSERT_BITS(thread->processor_ptr->thread[i]->Regs[REG_IMASK],1, intbitpos, (REG>>i) & 1);
-           }
-        }
-    },
+    /* */,
     (A_IMPLICIT_WRITES_IMASK_ANYTHREAD)
 )
 
@@ -1644,47 +1610,20 @@ DEF_MACRO(DO_IASSIGNW,
 
 
 DEF_MACRO(fDO_NMI,
-    {
-        int i;
-        for (i=0;i<RUNNABLE_THREADS_MAX;i++) {
-            if( ( (thread->processor_ptr->arch_proc_options->thread_enable_mask>>i) & 0x1) ) {
-                if (SREG & (1<<i)) {
-                    register_nmi_interrupt(thread->processor_ptr->thread[i]);
-                }
-            }
-        }
-    },
+    /* */,
 )
 
 DEF_MACRO(fDO_TRACE,
-    {
-        fHIDE(CALLBACK(thread->processor_ptr->options->trace_callback,
-            thread->system_ptr,thread->processor_ptr,
-            thread->threadId,SREG);)
-    },
+    /* */,
 )
 
 DEF_MACRO(DO_IASSIGNR,
-    {
-        int i;
-        int result=0;
-        int intbitpos = ((SREG>>16)&0xF);
-        for (i=0;i<RUNNABLE_THREADS_MAX;i++) {
-            if(( (thread->processor_ptr->arch_proc_options->thread_enable_mask>>i) & 0x1)) {
-                result |= (((thread->processor_ptr->thread[i]->Regs[REG_IMASK]>>intbitpos)&1)<<i);
-            }
-        }
-        DREG=result;
-    },
+    /* */,
     ()
 )
 
 DEF_MACRO(DO_SWI,
-        {fHIDE(CALLBACK(thread->processor_ptr->options->swi_callback,
-         thread->system_ptr,thread->processor_ptr,
-         thread->threadId,REG));
-         LOG_GLOBAL_REG_WRITE(REG_IPEND,(GLOBAL_REG_READ(REG_IPEND) | (REG & GLOBAL_REG_READ(REG_IEL))));
-        },
+        /* */,
         (A_EXCEPTION_SWI)
 )
 
@@ -1704,7 +1643,7 @@ DEF_MACRO(DO_SIAD,
 )
 
 DEF_MACRO(fBREAK,
-    {isdb_brkpt_insn(thread->processor_ptr,thread->threadId);},
+    /* */,
     ()
 )
 
@@ -1715,24 +1654,12 @@ DEF_MACRO(fPAUSE,
 
 
 DEF_MACRO(fTRAP,
-    warn("Trap NPC=%x ",fREAD_NPC());
-    warn("Trap exception, PCYCLE=%lld TYPE=%d NPC=%x IMM=0x%x",thread->processor_ptr->pstats[pcycles],TRAPTYPE,fREAD_NPC(),IMM);
-    register_trap_exception(thread,fREAD_NPC(),TRAPTYPE,IMM);,
+    /* */,
     (A_EXCEPTION_SWI)
 )
 
-DEF_MACRO(fINTERNAL_CLEAR_SAMEPAGE,
-    /* force re-xlate at next fetch, refresh of in_user_mode, etc */
-    /* Permissions change too... */
-    sys_utlb_invalidate(thread->processor_ptr,thread),
-    /* NOTHING */
-)
-
 DEF_MACRO(fCLEAR_RTE_EX,
-      {
-        fLOG_REG_FIELD(SSR,SSR_EX,0);
-        fINTERNAL_CLEAR_SAMEPAGE();
-      },
+      /* */,
       ()
 )
 
@@ -1758,36 +1685,17 @@ DEF_MACRO(fSET_TLB_LOCK,
 )
 
 DEF_MACRO(fSET_K0_LOCK,
-      {
-          if (fK0_LOCK_AVAILABLE() && sys_k0lock_queue_ready(thread)) {
-              warn("k0lock: T%d: PC=0x%x: PCycle=%lld",thread->threadId,thread->Regs[REG_PC],thread->processor_ptr->pstats[pcycles]);
-              fLOG_GLOBAL_REG_FIELD(SYSCONF,SYSCFG_K0LOCK,1);
-          } else {
-              warn("k0lock_waiting: T%d: PC=0x%x: PCycle=%lld",thread->threadId,thread->Regs[REG_PC],thread->processor_ptr->pstats[pcycles]);
-                sys_waiting_for_k0_lock(thread);
-          }
-      },
+      /* */,
       ()
 )
 
 DEF_MACRO(fCLEAR_TLB_LOCK,
-      {
-          int i;
-          fLOG_GLOBAL_REG_FIELD(SYSCONF,SYSCFG_TLBLOCK,0);
-          for (i = 0; i < RUNNABLE_THREADS_MAX; i++) {
-              if(( (thread->processor_ptr->arch_proc_options->thread_enable_mask>>i) & 0x1)) {
-                  thread->processor_ptr->thread[i]->cu_tlb_lock_waiting = 0;
-              }
-          }
-      },
+      /* */,
       ()
 )
 
 DEF_MACRO(fCLEAR_K0_LOCK,
-      do {
-      warn("k0unlock: T%d: PC=0x%x: Pcycle=%lld",thread->threadId,thread->Regs[REG_PC], thread->processor_ptr->pstats[pcycles]);
-      sys_initiate_clear_k0_lock(thread);
-      } while (0),
+      /* */,
       ()
 )
 
@@ -1809,9 +1717,7 @@ DEF_MACRO(fLOG_REG_FIELD,
 )
 
 DEF_MACRO(fWRITE_GLOBAL_REG_FIELD,
-    fINSERT_BITS(thread->processor_ptr->global_regs[REG_##REG],
-            reg_field_info[FIELD].width,
-            reg_field_info[FIELD].offset,VAL),
+    /* */,
 )
 
 DEF_MACRO(fLOG_GLOBAL_REG_FIELD,
@@ -1829,9 +1735,7 @@ DEF_MACRO(fREAD_REG_FIELD,
 )
 
 DEF_MACRO(fREAD_GLOBAL_REG_FIELD,
-    fEXTRACTU_BITS(thread->processor_ptr->global_regs[REG_##REG],
-        reg_field_info[FIELD].width,
-        reg_field_info[FIELD].offset),
+    /* */,
     /* ATTRIBS */
 )
 
@@ -1851,9 +1755,7 @@ DEF_MACRO(fSET_FIELD,
 )
 
 DEF_MACRO(fSET_RUN_MODE_NOW,
-        {thread->processor_ptr->global_regs[REG_MODECTL] |= (1<<TNUM);
-         thread->last_commit_cycle = thread->processor_ptr->pcycle_counter;
-         sys_recalc_num_running_threads(thread->processor_ptr);},
+        /* */,
 )
 
 DEF_MACRO(fIN_DEBUG_MODE,
@@ -1881,16 +1783,12 @@ DEF_MACRO(fCLEAR_RUN_MODE,
 )
 
 DEF_MACRO(fCLEAR_RUN_MODE_NOW,
-    do {
-        fWRITE_GLOBAL_REG_FIELD(MODECTL,MODECTL_E,
-        fREAD_GLOBAL_REG_FIELD(MODECTL,MODECTL_E) & ~(1<<(TNUM)));
-        sys_recalc_num_running_threads(thread->processor_ptr);
-    } while (0),
+    /* */,
     /* NOTHING */
 )
 
 DEF_MACRO(fGET_RUN_MODE,
-        ((thread->processor_ptr->global_regs[REG_MODECTL]>>TNUM)&0x1),
+        /* */,
 )
 
 DEF_MACRO(fSET_WAIT_MODE,
@@ -1900,13 +1798,11 @@ DEF_MACRO(fSET_WAIT_MODE,
 )
 
 DEF_MACRO(fCLEAR_WAIT_MODE,
-        {thread->processor_ptr->global_regs[REG_MODECTL] &= ~(1<<(TNUM+16));
-         thread->last_commit_cycle = thread->processor_ptr->pcycle_counter;
-         sys_recalc_num_running_threads(thread->processor_ptr);},
+        /* */,
 )
 
 DEF_MACRO(fGET_WAIT_MODE,
-        ((thread->processor_ptr->global_regs[REG_MODECTL]>>(TNUM+16))&0x1),
+        /* */,
 )
 
 
@@ -1935,20 +1831,17 @@ DEF_MACRO(fPOW2_ROUNDUP,
 )
 
 DEF_MACRO(fTLB_IDXMASK,
-    ((INDEX) & (fPOW2_ROUNDUP(fCAST4u(thread->processor_ptr->arch_proc_options->jtlb_size)) - 1)),
+    /* */,
     ()
 )
 
 DEF_MACRO(fTLB_NONPOW2WRAP,
-    (((INDEX) >= thread->processor_ptr->arch_proc_options->jtlb_size) ? ((INDEX) - thread->processor_ptr->arch_proc_options->jtlb_size) : (INDEX)),
+    /* */,
     /* ATTRIBS */
 )
 
 DEF_MACRO(fTLBW,
-    do {size4u_t __myidx = fTLB_NONPOW2WRAP(fTLB_IDXMASK(INDEX));
-        TLB_REG_WRITE(__myidx,VALUE);
-        fHIDE(CALLBACK(thread->processor_ptr->options->tlbw_callback,thread->system_ptr,thread->processor_ptr,thread->threadId,__myidx);)
-        fHIDE(sys_tlb_write(thread,__myidx,VALUE);)} while (0),
+    /* */,
     /* ATTRIBS */
 )
 
@@ -2014,7 +1907,7 @@ DEF_MACRO(WRITE_UGP,
 )
 
 DEF_MACRO(fSTART,
-    fLOG_GLOBAL_REG_FIELD(MODECTL,MODECTL_E, fREAD_GLOBAL_REG_FIELD(MODECTL,MODECTL_E) | (((REG & ((1<<RUNNABLE_THREADS_MAX)-1))) & THREAD_EN_MASK(thread->processor_ptr))),
+    /* */,
     ()
 )
 
@@ -2066,10 +1959,7 @@ DEF_MACRO(fDCFETCH,
 )
 
 DEF_MACRO(fICINVA,
-    {
-        arch_internal_flush(thread->processor_ptr, 0, 0xffffffff);
-        sys_icinva(thread, (REG),insn->slot);
-    },
+    /* */,
     (A_ICINVA)
 )
 
@@ -2143,8 +2033,8 @@ DEF_MACRO(fTAKEN_INTERRUPT_EDGECLEAR,
 )
 
 DEF_MACRO(fSET_IAD,
-        { sys_siad(thread,INT_NUMTOMASK(intnum)); thread->processor_ptr->global_regs[REG_IAD] |= INT_NUMTOMASK(intnum); },
-        ()
+    /* */,
+    ()
 )
 
 DEF_MACRO(fBRANCH_SPECULATE_STALL,

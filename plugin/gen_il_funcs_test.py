@@ -214,11 +214,29 @@ ATTRIBUTES( \
 SEMANTICS( \
     "C2_muxii", \
     "Rd32=mux(Pu4,#s8,#S8)", \
-    \"\"\"{ fIMMEXT(siV); (fLSBOLD(PuV)) ? (RdV=siV):(RdV=SiV); }\"\"\" \
+    \"\"\"{ fIMMEXT(siV); RdV = (fLSBOLD(PuV) ? siV : SiV); }\"\"\" \
 )
 ATTRIBUTES( \
     "C2_muxii", \
     "ATTRIBS(A_ARCHV2)" \
+)
+SEMANTICS( \
+    "C2_mux", \
+    "Rd32=mux(Pu4,Rs32,Rt32)", \
+    \"\"\"{ (fLSBOLD(PuV)) ? (RdV=RsV):(RdV=RtV); }\"\"\" \
+)
+ATTRIBUTES( \
+    "C2_mux", \
+    "ATTRIBS()" \
+)
+SEMANTICS( \
+    "C2_all8", \
+    "Pd4=all8(Ps4)", \
+    \"\"\"{ PdV = (PsV == 0xff ? 0xff : 0x00); }\"\"\" \
+)
+ATTRIBUTES( \
+    "C2_all8", \
+    "ATTRIBS(A_CRSLOT23)" \
 )
 SEMANTICS( \
     "S2_tstbit_i", \
@@ -416,7 +434,7 @@ SEMANTICS( \
 )
 ATTRIBUTES( \
     "SL2_return_t", \
-    "ATTRIBS(A_JUMP,A_INDIRECT,A_SUBINSN,A_LOAD,A_RESTRICT_SLOT0ONLY,A_RESTRICT_SLOT0ONLY,A_BN_RETURN)" \
+    "ATTRIBS(A_JUMP,A_INDIRECT,A_SUBINSN,A_LOAD,A_RESTRICT_SLOT0ONLY,A_RESTRICT_SLOT0ONLY)" \
 )
 SEMANTICS( \
     "L4_loadri_rr", \
@@ -784,6 +802,7 @@ class TestGenIlFunc(unittest.TestCase):
         ])
 
   def test_muxii(self):
+    # An assignment from a ternary expression, as QEMU writes mux now.
     self.assertEqual(
         self.parse_semantics('C2_muxii'), [
             '{ LowLevelILLabel true_case, false_case, done;',
@@ -791,6 +810,29 @@ class TestGenIlFunc(unittest.TestCase):
             IlSetRegister(4, 'RdV', IlConst(4, 'siV')),
             IlGoto('done'), 'false_case',
             IlSetRegister(4, 'RdV', IlConst(4, 'SiV')), 'done', '}'
+        ])
+
+  def test_mux(self):
+    # A ternary statement, as older QEMU wrote mux.
+    self.assertEqual(
+        self.parse_semantics('C2_mux'), [
+            '{ LowLevelILLabel true_case, false_case, done;',
+            IlIf(IlRegister(1, 'PuV'), 'true_case', 'false_case'), 'true_case',
+            IlSetRegister(4, 'RdV', IlRegister(4, 'RsV')),
+            IlGoto('done'), 'false_case',
+            IlSetRegister(4, 'RdV', IlRegister(4, 'RtV')), 'done', '}'
+        ])
+
+  def test_all8(self):
+    self.assertEqual(
+        self.parse_semantics('C2_all8'), [
+            '{ LowLevelILLabel true_case, false_case, done;',
+            IlIf(
+                IlCompareEqual(1, IlRegister(1, 'PsV'), IlConst(4, '0xff')),
+                'true_case', 'false_case'), 'true_case',
+            IlSetRegister(1, 'PdV', IlConst(4, '0xff')),
+            IlGoto('done'), 'false_case',
+            IlSetRegister(1, 'PdV', IlConst(4, '0x00')), 'done', '}'
         ])
 
   def test_tstbit(self):
@@ -1072,6 +1114,8 @@ class TestGenIlFunc(unittest.TestCase):
                     4, IlSignExtend(8, IlLowPart(4, IlRegister(8, 'TMP_REG'))))),
             IlSetRegister(4, 'HEX_REG_SP',
                           IlAdd(4, IlRegister(4, 'EA_REG'), IlConst(4, 8))),
+            # A conditional return (#40): the flag says the branch is taken.
+            IlSetRegister(1, 'BRANCH_TAKEN_ARRAY + insn_num', IlConst(1, 1)),
             IlReturn(
                 IlSignExtend(
                     8,
@@ -1080,6 +1124,8 @@ class TestGenIlFunc(unittest.TestCase):
                         IlArithShiftRight(8, IlRegister(8, 'TMP_REG'),
                                           IlConst(1, 32))))), 'done', '}'
         ])
+    self.assertIn('A_BN_COND_J', attribdict['SL2_return_t'])
+    self.assertIn('A_BN_RETURN', attribdict['SL2_return_t'])
 
   def test_loadri_rr(self):
     self.assertEqual(

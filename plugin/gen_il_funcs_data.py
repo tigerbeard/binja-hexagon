@@ -256,5 +256,12 @@ SUPPORTED_TAGS = [
     'SS2_storebi1', 'SS2_allocframe',
     # V71 load-acquire and store-release, lifted as plain loads and stores.
     'L2_loadw_aq', 'L4_loadd_aq', 'S2_storew_rl_at_vi', 'S2_storew_rl_st_vi',
-    'S4_stored_rl_at_vi', 'S4_stored_rl_st_vi'
+    'S4_stored_rl_at_vi', 'S4_stored_rl_st_vi',
+    # V73 hinted branches and V79 non-temporal stores and dcfetch, with the
+    # same semantics as their older forms.
+    'J2_callrh', 'J2_jumprh', 'S2_storerb_pi_nt', 'S2_storerh_pi_nt',
+    'S2_storeri_pi_nt', 'S2_storerd_pi_nt', 'S2_pstorerbt_pi_nt',
+    'S2_pstorerbf_pi_nt', 'S2_pstorerht_pi_nt', 'S2_pstorerhf_pi_nt',
+    'S2_pstorerit_pi_nt', 'S2_pstorerif_pi_nt', 'S2_pstorerdt_pi_nt',
+    'S2_pstorerdf_pi_nt', 'Y2_dcfetchbo_nt'
 ]

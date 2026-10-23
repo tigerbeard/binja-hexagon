@@ -21,14 +21,13 @@
 #include "absl/status/status.h"
 #include "binaryninjaapi.h"
 #include "plugin/decoder.h"
-#include "plugin/packet_db.h"
 
 // Prepares packet for il lifting by removing no-op extender instructions,
 // moving dotnew instructions to the end and splitting cmpjump instructions.
 // Exported for testing.
 Packet PreparePacketForLifting(const Packet &src);
 
+// Lifts the whole packet at |pc|, which is one Binary Ninja instruction.
 absl::Status FillBnInstructionLowLevelIL(BinaryNinja::Architecture *arch,
-                                         const PacketDb::InsnInfo &input,
-                                         size_t &len,
+                                         uint64_t pc, const Packet &src,
                                          BinaryNinja::LowLevelILFunction &il);

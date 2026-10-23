@@ -16,6 +16,9 @@
 
 #include "plugin/decoder.h"
 
+#include <algorithm>
+#include <cstring>
+
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -45,6 +48,18 @@ absl::StatusOr<Packet> Decoder::DecodePacket(absl::Span<const uint32_t> words) {
     return absl::FailedPreconditionError("Insufficient words in packet");
   }
   return pkt;
+}
+
+absl::StatusOr<Packet> Decoder::DecodePacketAt(const uint8_t *data,
+                                               size_t len) {
+  uint32_t words[kMaxPacketBytes / 4];
+  const size_t num_words = std::min(len, kMaxPacketBytes) / 4;
+  if (num_words == 0) {
+    return absl::FailedPreconditionError("Insufficient bytes for a packet");
+  }
+  // |data| need not be aligned for uint32_t.
+  memcpy(words, data, num_words * 4);
+  return DecodePacket(absl::MakeConstSpan(words, num_words));
 }
 
 bool operator==(const Insn &lhs, const Insn &rhs) {

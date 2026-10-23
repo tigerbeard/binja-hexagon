@@ -33,7 +33,7 @@ import tempfile
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
                     'test_binaries'))
-from il_test_util import normalize_il  # noqa: E402
+from il_test_util import instruction_lines, normalize_il  # noqa: E402
 
 LLVM_BIN = os.environ.get('HEXAGON_LLVM_BIN', '/opt/homebrew/opt/llvm/bin')
 MCPU = 'hexagonv79'
@@ -110,12 +110,12 @@ def function_at(bv, snippet, label):
   return bv.get_function_at(snippet.symbols[label])
 
 
-def disasm(func):
-  """Instruction text per line, in address order."""
+def disasm(binja, func):
+  """Disassembly, one line per instruction word, in address order."""
   lines = ['']
   for block in sorted(func.basic_blocks, key=lambda b: b.start):
     for tokens, _ in block:
-      lines.append(''.join(map(str, tokens)).strip())
+      lines.extend(instruction_lines(binja, tokens))
   return '\n'.join(lines)
 
 

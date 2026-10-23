@@ -22,7 +22,7 @@
 #include "plugin/hex_regs.h"
 #include "plugin/il_util.h"
 #include "plugin/insn_util.h"
-#include "plugin/packet_db.h"
+#include "plugin/decoder.h"
 #include "plugin/relocs.h"
 
 using namespace BinaryNinja;
@@ -144,17 +144,15 @@ public:
     return 16; // Up to four instructions in a packet.
   }
 
+  // Each packet is one Binary Ninja instruction. Packets are decoded from the
+  // bytes Binary Ninja passes in, so nothing is cached between views.
   bool GetInstructionInfo(const uint8_t *data, uint64_t addr, size_t maxLen,
                           InstructionInfo &result) override {
-    auto match_or = packet_db_.Lookup(addr);
-    if (!match_or.ok()) {
-      if (!packet_db_.AddBytes(absl::MakeConstSpan(data, maxLen), addr).ok()) {
-        return false;
-      }
-      match_or = packet_db_.Lookup(addr);
-      CHECK(match_or.ok()) << "Lookup() failed after AddBytes()";
+    auto pkt = Decoder::Get().DecodePacketAt(data, maxLen);
+    if (!pkt.ok()) {
+      return false;
     }
-    auto status = FillBnInstructionInfo(match_or.value(), result);
+    auto status = FillBnInstructionInfo(addr, *pkt, result);
     if (!status.ok()) {
       LOG(WARNING) << "FillBnInstructionInfo failed " << status;
       return false;
@@ -164,37 +162,31 @@ public:
 
   bool GetInstructionText(const uint8_t *data, uint64_t addr, size_t &len,
                           std::vector<InstructionTextToken> &result) override {
-    auto match_or = packet_db_.Lookup(addr);
-    if (!match_or.ok()) {
-      if (!packet_db_.AddBytes(absl::MakeConstSpan(data, len), addr).ok()) {
-        return false;
-      }
-      match_or = packet_db_.Lookup(addr);
-      CHECK(match_or.ok()) << "Lookup() failed after AddBytes()";
+    auto pkt = Decoder::Get().DecodePacketAt(data, len);
+    if (!pkt.ok()) {
+      return false;
     }
-    auto status = FillBnInstructionTextTokens(match_or.value(), len, result);
+    auto status = FillBnInstructionTextTokens(addr, *pkt, result);
     if (!status.ok()) {
       LOG(WARNING) << "FillBnInstructionTextTokens failed " << status;
       return false;
     }
+    len = pkt->encod_pkt_size_in_bytes;
     return true;
   }
 
   bool GetInstructionLowLevelIL(const uint8_t *data, uint64_t addr, size_t &len,
                                 LowLevelILFunction &il) override {
-    auto match_or = packet_db_.Lookup(addr);
-    if (!match_or.ok()) {
-      if (!packet_db_.AddBytes(absl::MakeConstSpan(data, len), addr).ok()) {
-        return false;
-      }
-      match_or = packet_db_.Lookup(addr);
-      CHECK(match_or.ok()) << "Lookup() failed after AddBytes()";
+    auto pkt = Decoder::Get().DecodePacketAt(data, len);
+    if (!pkt.ok()) {
+      return false;
     }
-    auto status = FillBnInstructionLowLevelIL(this, match_or.value(), len, il);
+    auto status = FillBnInstructionLowLevelIL(this, addr, *pkt, il);
     if (!status.ok()) {
       LOG(WARNING) << "FillBnInstructionLowLevelIL failed " << status;
       return false;
     }
+    len = pkt->encod_pkt_size_in_bytes;
     return true;
   }
 
@@ -344,9 +336,6 @@ public:
   uint32_t GetStackPointerRegister() override { return HEX_REG_SP; }
 
   uint32_t GetLinkRegister() override { return HEX_REG_LR; }
-
-private:
-  PacketDb packet_db_;
 };
 
 extern "C" {

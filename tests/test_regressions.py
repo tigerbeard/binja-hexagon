@@ -18,14 +18,9 @@
 Each fix adds a test here that fails before the fix. A test for a bug that is
 not fixed yet carries @unittest.expectedFailure and names its issue; the fix
 removes the marker.
-
-Run without arguments, every test runs in a fresh process: the plugin caches
-decoded packets by address across views (#3), so snippets loaded at the same
-address in one process would see each other's instructions.
 """
 
 import os
-import subprocess
 import sys
 import unittest
 
@@ -70,7 +65,7 @@ f:
   { r0 = add(r1, r2) }
   { jumpr r31 }
 ''')['f']
-    self.assertEqual(hexasm.disasm(f), '''
+    self.assertEqual(hexasm.disasm(binja, f), '''
 { R0 = add(R1,R2) }
 { jumpr LR }''')
     self.assertEqual(
@@ -110,37 +105,37 @@ f:
                      ['0: temp#0.d = SP {arg_0}', '1: [temp#0.d {arg_0}].d = R0'])
 
 
-def run_isolated():
-  """Runs every test in its own process and returns the exit status."""
-  suite = unittest.defaultTestLoader.loadTestsFromModule(
-      sys.modules[__name__])
+class TestPacketDecoding(SnippetTest):
 
-  def ids(s):
-    for t in s:
-      yield from ids(t) if isinstance(t, unittest.TestSuite) else [t.id()]
+  def test_views_at_same_address_show_their_own_bytes(self):
+    # #3: decoded packets were cached by address across all views.
+    first = self.analyse('''
+f:
+  { r0 = add(r1, r2) }
+  { jumpr r31 }
+''')['f']
+    self.assertIn('R0 = add(R1,R2)', hexasm.disasm(binja, first))
+    second = self.analyse('''
+f:
+  { r0 = sub(r1, r2) }
+  { jumpr r31 }
+''')['f']
+    self.assertIn('R0 = sub(R1,R2)', hexasm.disasm(binja, second))
 
-  failed = []
-  for test_id in ids(suite):
-    name = test_id.split('.', 1)[1]
-    result = subprocess.run([sys.executable, os.path.abspath(__file__), name],
-                            capture_output=True,
-                            text=True)
-    if result.returncode != 0:
-      status = 'FAILED'
-    elif 'skipped=' in result.stderr:
-      status = 'skipped'
-    else:
-      status = 'ok'
-    print('{} ... {}'.format(name, status))
-    if result.returncode != 0:
-      failed.append(name)
-      print(result.stderr)
-  print('{} failed'.format(len(failed)) if failed else 'all passed')
-  return 1 if failed else 0
+  def test_long_run_of_non_final_words_is_rejected(self):
+    # #15: words whose parse bits say "not last" (01) were decoded without a
+    # limit, overrunning the 7-entry instruction array of a packet.
+    arch = binja.Architecture['hexagon']
+    not_last = (0xf3014200).to_bytes(4, 'little')  # R0 = add(R1,R2), parse 01
+    last = (0xf301c200).to_bytes(4, 'little')
+    data = not_last * 9 + last
+    self.assertIsNone(arch.get_instruction_info(data, 0))
+    tokens, length = arch.get_instruction_text(data, 0) or ([], 0)
+    self.assertEqual((tokens, length), ([], 0))
+    il = binja.LowLevelILFunction(arch)
+    self.assertFalse(arch.get_instruction_low_level_il(data, 0, il))
+
 
 
 if __name__ == '__main__':
-  if len(sys.argv) > 1:
-    unittest.main()
-  else:
-    sys.exit(run_isolated())
+  unittest.main()

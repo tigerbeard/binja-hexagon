@@ -16,9 +16,12 @@
 
 #include "plugin/insn_util.h"
 
+#include <vector>
+
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "plugin/status_matchers.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace {
@@ -26,6 +29,7 @@ namespace {
 using namespace BinaryNinja;
 using absl::IsOk;
 using absl::MakeSpan;
+using testing::ElementsAre;
 using testing::Eq;
 using testing::Not;
 
@@ -141,80 +145,109 @@ constexpr uint64_t kTrapAddress = 0x10;
 constexpr uint64_t kUncondJumpAddress = 0x14;
 constexpr uint64_t kUncondJumpDest = 0x150;
 constexpr uint64_t kReturnAddress = 0x34;
-constexpr uint64_t kCondJumpAddress = 0x60;
-constexpr uint64_t kCondJumpLastInstAddress = 0x68;
+constexpr uint64_t kCondJumpPacket = 0x5c;
 constexpr uint64_t kCondJumpDest = 0x194;
 constexpr uint64_t kCondJumpElseDest = 0x1a4;
-constexpr uint64_t kCondJumpNoElseLastInstAddress = 0x15c;
+constexpr uint64_t kCondJumpNoElsePacket = 0x158;
 constexpr uint64_t kCondJumpNoElseDest = 0x164;
 constexpr uint64_t kCondJumpNoElseElseDest = 0x160;
 constexpr uint64_t kSubReturnAddress = 0x6104;
-constexpr uint64_t kIndirectCallAddress = 0xB0000028;
-constexpr uint64_t kCondIndirectJump = 0x138;
+constexpr uint64_t kIndirectCallPacket = 0xB0000024;
+constexpr uint64_t kCondIndirectJumpPacket = 0x134;
 
 class InsnUtilTest : public ::testing::Test {
 protected:
-  void SetUp() override {
-    ASSERT_THAT(db_.AddBytes(kProgramPart1, kProgramPart1Address), IsOk());
-    ASSERT_THAT(db_.AddBytes(kProgramPart2, kProgramPart2Address), IsOk());
-    ASSERT_THAT(db_.AddBytes(kProgramPart3, kProgramPart3Address), IsOk());
-    ASSERT_THAT(db_.AddBytes(kProgramPart4, kProgramPart4Address), IsOk());
-    ASSERT_THAT(db_.AddBytes(kProgramPart5, kProgramPart5Address), IsOk());
-    ASSERT_THAT(db_.AddBytes(kProgramPart6, kProgramPart6Address), IsOk());
-    ASSERT_THAT(db_.AddBytes(kProgramPart7, kProgramPart7Address), IsOk());
-    ASSERT_THAT(db_.AddBytes(kProgramPart8, kProgramPart8Address), IsOk());
-    ASSERT_THAT(db_.AddBytes(kProgramPart9, kProgramPart9Address), IsOk());
-    ASSERT_THAT(db_.AddBytes(kProgramPart10, kProgramPart10Address), IsOk());
-    ASSERT_THAT(db_.AddBytes(kProgramPart11, kProgramPart11Address), IsOk());
+  struct Part {
+    uint64_t address;
+    absl::Span<const uint8_t> bytes;
+  };
+
+  // Decodes the packet that starts at |pc|.
+  Packet Decode(uint64_t pc) {
+    for (const Part &part : parts_) {
+      if (part.address <= pc && pc < part.address + part.bytes.size()) {
+        auto bytes = part.bytes.subspan(pc - part.address);
+        auto pkt = Decoder::Get().DecodePacketAt(bytes.data(), bytes.size());
+        EXPECT_THAT(pkt, IsOk());
+        return pkt.ok() ? *pkt : Packet{};
+      }
+    }
+    ADD_FAILURE() << "No program bytes at " << pc;
+    return Packet{};
   }
 
-  std::string Disasm(const PacketDb::InsnInfo &input) {
-    size_t len = 0;
+  InstructionInfo Info(uint64_t pc) {
+    InstructionInfo result;
+    EXPECT_THAT(FillBnInstructionInfo(pc, Decode(pc), result), IsOk());
+    return result;
+  }
+
+  std::vector<InstructionTextToken> Tokens(uint64_t pc) {
     std::vector<InstructionTextToken> result;
-    EXPECT_THAT(FillBnInstructionTextTokens(input, len, result), IsOk());
-    EXPECT_EQ(len, 4);
+    EXPECT_THAT(FillBnInstructionTextTokens(pc, Decode(pc), result), IsOk());
+    return result;
+  }
+
+  // The packet's text, with its lines joined by '\n'.
+  std::string Disasm(uint64_t pc) {
     std::string disasm;
-    for (const auto &tok : result) {
-      absl::StrAppend(&disasm, tok.text);
+    for (const auto &tok : Tokens(pc)) {
+      absl::StrAppend(&disasm, tok.type == NewLineToken ? "\n" : tok.text);
+    }
+    if (!disasm.empty() && disasm.back() == '\n') {
+      disasm.pop_back();
     }
     return disasm;
   }
 
-  PacketDb db_;
+  // The offsets that the packet's NewLineTokens give their lines.
+  std::vector<uint64_t> LineOffsets(uint64_t pc) {
+    std::vector<uint64_t> offsets;
+    for (const auto &tok : Tokens(pc)) {
+      if (tok.type == NewLineToken) {
+        offsets.push_back(tok.value);
+      }
+    }
+    return offsets;
+  }
+
+  const std::vector<Part> parts_ = {
+      {kProgramPart1Address, kProgramPart1},
+      {kProgramPart2Address, kProgramPart2},
+      {kProgramPart3Address, kProgramPart3},
+      {kProgramPart4Address, kProgramPart4},
+      {kProgramPart5Address, kProgramPart5},
+      {kProgramPart6Address, kProgramPart6},
+      {kProgramPart7Address, kProgramPart7},
+      {kProgramPart8Address, kProgramPart8},
+      {kProgramPart9Address, kProgramPart9},
+      {kProgramPart10Address, kProgramPart10},
+      {kProgramPart11Address, kProgramPart11},
+  };
 };
 
 TEST_F(InsnUtilTest, FillsCallInfo) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(kCallAddress));
-  InstructionInfo result;
-  EXPECT_THAT(FillBnInstructionInfo(match, result), IsOk());
+  InstructionInfo result = Info(kCallAddress);
   EXPECT_EQ(result.length, 4);
   EXPECT_EQ(result.branchCount, 1);
   EXPECT_EQ(result.branchType[0], CallDestination);
   EXPECT_EQ(result.branchTarget[0], kCallDest);
 }
 
-TEST_F(InsnUtilTest, SkipsNonLastInstruction) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(kCondJumpAddress));
-  InstructionInfo result;
-  EXPECT_THAT(FillBnInstructionInfo(match, result), IsOk());
-  EXPECT_EQ(result.length, 4);
-  EXPECT_EQ(result.branchCount, 0);
+TEST_F(InsnUtilTest, ReportsWholePacketLength) {
+  EXPECT_EQ(Info(kCondJumpPacket).length, 16);
+  EXPECT_EQ(Info(0x8).length, 8);
 }
 
 TEST_F(InsnUtilTest, FillsTrapInfo) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(kTrapAddress));
-  InstructionInfo result;
-  EXPECT_THAT(FillBnInstructionInfo(match, result), IsOk());
+  InstructionInfo result = Info(kTrapAddress);
   EXPECT_EQ(result.length, 4);
   EXPECT_EQ(result.branchCount, 1);
   EXPECT_EQ(result.branchType[0], SystemCall);
 }
 
 TEST_F(InsnUtilTest, FillsUncondJumpInfo) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match,
-                       db_.Lookup(kUncondJumpAddress));
-  InstructionInfo result;
-  EXPECT_THAT(FillBnInstructionInfo(match, result), IsOk());
+  InstructionInfo result = Info(kUncondJumpAddress);
   EXPECT_EQ(result.length, 4);
   EXPECT_EQ(result.branchCount, 1);
   EXPECT_EQ(result.branchType[0], UnconditionalBranch);
@@ -222,29 +255,22 @@ TEST_F(InsnUtilTest, FillsUncondJumpInfo) {
 }
 
 TEST_F(InsnUtilTest, FillsReturnInfo) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(kReturnAddress));
-  InstructionInfo result;
-  EXPECT_THAT(FillBnInstructionInfo(match, result), IsOk());
+  InstructionInfo result = Info(kReturnAddress);
   EXPECT_EQ(result.length, 4);
   EXPECT_EQ(result.branchCount, 1);
   EXPECT_EQ(result.branchType[0], FunctionReturn);
 }
 
 TEST_F(InsnUtilTest, FillsSubReturnInfo) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(kSubReturnAddress));
-  InstructionInfo result;
-  EXPECT_THAT(FillBnInstructionInfo(match, result), IsOk());
+  InstructionInfo result = Info(kSubReturnAddress);
   EXPECT_EQ(result.length, 4);
   EXPECT_EQ(result.branchCount, 1);
   EXPECT_EQ(result.branchType[0], FunctionReturn);
 }
 
 TEST_F(InsnUtilTest, FillsCondJumpInfo) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match,
-                       db_.Lookup(kCondJumpLastInstAddress));
-  InstructionInfo result;
-  EXPECT_THAT(FillBnInstructionInfo(match, result), IsOk());
-  EXPECT_EQ(result.length, 4);
+  InstructionInfo result = Info(kCondJumpPacket);
+  EXPECT_EQ(result.length, 16);
   EXPECT_EQ(result.branchCount, 2);
   EXPECT_EQ(result.branchType[0], TrueBranch);
   EXPECT_EQ(result.branchTarget[0], kCondJumpDest);
@@ -253,11 +279,8 @@ TEST_F(InsnUtilTest, FillsCondJumpInfo) {
 }
 
 TEST_F(InsnUtilTest, FillsCondJumpImplicitElseInfo) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match,
-                       db_.Lookup(kCondJumpNoElseLastInstAddress));
-  InstructionInfo result;
-  EXPECT_THAT(FillBnInstructionInfo(match, result), IsOk());
-  EXPECT_EQ(result.length, 4);
+  InstructionInfo result = Info(kCondJumpNoElsePacket);
+  EXPECT_EQ(result.length, 8);
   EXPECT_EQ(result.branchCount, 2);
   EXPECT_EQ(result.branchType[0], TrueBranch);
   EXPECT_EQ(result.branchTarget[0], kCondJumpNoElseDest);
@@ -266,73 +289,77 @@ TEST_F(InsnUtilTest, FillsCondJumpImplicitElseInfo) {
 }
 
 TEST_F(InsnUtilTest, DisasmsCallInsn) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(0));
-  EXPECT_THAT(Disasm(match), Eq("{ call 0x28 }"));
+  EXPECT_THAT(Disasm(0), Eq("{ call 0x28 }"));
 }
 
 TEST_F(InsnUtilTest, DisasmsTrapInsn) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(0x10));
-  EXPECT_THAT(Disasm(match), Eq("{ trap0(#0x0) }"));
+  EXPECT_THAT(Disasm(0x10), Eq("{ trap0(#0x0) }"));
 }
 
 TEST_F(InsnUtilTest, DisasmsJumpInsn) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(0x14));
-  EXPECT_THAT(Disasm(match), Eq("{ jump 0x150 }"));
+  EXPECT_THAT(Disasm(0x14), Eq("{ jump 0x150 }"));
 }
 
 TEST_F(InsnUtilTest, DisasmsIfInsn) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(0x60));
-  EXPECT_THAT(Disasm(match), Eq("  if (P0.new) jump:t 0x194  "));
+  EXPECT_THAT(Disasm(kCondJumpPacket), Eq("{ immext(#0x100)\n"
+                                          "  if (P0.new) jump:t 0x194\n"
+                                          "  jump 0x1a4\n"
+                                          "  P0 = cmp.eq(R3,#0xffffffdd) }"));
 }
 
 TEST_F(InsnUtilTest, DisasmsSubInsn) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(0x14c));
-  EXPECT_THAT(Disasm(match), Eq("{ R1 = #0x0; R2 = #0x0 }"));
+  EXPECT_THAT(Disasm(0x14c), Eq("{ R1 = #0x0; R2 = #0x0 }"));
 }
 
 TEST_F(InsnUtilTest, DisasmsImmext) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(0x8));
-  EXPECT_THAT(Disasm(match), Eq("{ immext(#0x0)  "));
-  ASSERT_OK_AND_ASSIGN(match, db_.Lookup(0xc));
-  EXPECT_THAT(Disasm(match), Eq("  R1 = ##0x18 }"));
+  EXPECT_THAT(Disasm(0x8), Eq("{ immext(#0x0)\n"
+                              "  R1 = ##0x18 }"));
 }
 
 TEST_F(InsnUtilTest, DisasmsCombineTwoImmexts) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(0x60f8));
-  EXPECT_THAT(Disasm(match), Eq("  R3:R2 = combine(#0x4,##0xffff) }"));
+  EXPECT_THAT(Disasm(0x60ec), Eq("{ immext(#0x8e00)\n"
+                                 "  R16 = add(PC,##0x8e1c)\n"
+                                 "  immext(#0xffc0)\n"
+                                 "  R3:R2 = combine(#0x4,##0xffff) }"));
 }
 
 TEST_F(InsnUtilTest, DisasmsMemd) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(0x7164));
-  EXPECT_THAT(Disasm(match),
-              Eq("  memd(SP+#0xfffffff0) = R17:R16; allocframe(#0x10) }"));
+  EXPECT_THAT(Disasm(0x7160),
+              Eq("{ R16 = R0\n"
+                 "  memd(SP+#0xfffffff0) = R17:R16; allocframe(#0x10) }"));
 }
 
 TEST_F(InsnUtilTest, DisasmsLoop) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(0x1c0));
-  EXPECT_THAT(Disasm(match), Eq("{ loop0(0x1c8,#0xa)  "));
-  ASSERT_OK_AND_ASSIGN(match, db_.Lookup(0x1cc));
-  EXPECT_THAT(Disasm(match), Eq("  nop }  :endloop0"));
+  EXPECT_THAT(Disasm(0x1c0), Eq("{ loop0(0x1c8,#0xa)\n"
+                                "  R2 = #0x0 }"));
+  EXPECT_THAT(Disasm(0x1c8), Eq("{ R2 = add(R2,#0x1)\n"
+                                "  nop }  :endloop0"));
+}
+
+TEST_F(InsnUtilTest, LinesCarryTheirWordOffsets) {
+  EXPECT_THAT(LineOffsets(0x60ec), ElementsAre(0, 4, 8, 12));
+  // A duplex is one word and one line.
+  EXPECT_THAT(LineOffsets(0x7160), ElementsAre(0, 4));
+  EXPECT_THAT(LineOffsets(kCallAddress), ElementsAre(0));
+}
+
+TEST_F(InsnUtilTest, RejectsPacketCutShort) {
+  auto bytes = absl::MakeConstSpan(kProgramPart3).subspan(kCondJumpPacket -
+                                                          kProgramPart3Address);
+  EXPECT_THAT(Decoder::Get().DecodePacketAt(bytes.data(), 8), Not(IsOk()));
 }
 
 TEST_F(InsnUtilTest, DoesNotAnnotateIndirectCalls) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match,
-                       db_.Lookup(kIndirectCallAddress));
-  InstructionInfo result;
-  EXPECT_THAT(FillBnInstructionInfo(match, result), IsOk());
-  EXPECT_EQ(result.branchCount, 0);
+  EXPECT_EQ(Info(kIndirectCallPacket).branchCount, 0);
 }
 
 TEST_F(InsnUtilTest, DoesNotAnnotateCondIndirectJumps) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(kCondIndirectJump));
-  InstructionInfo result;
-  EXPECT_THAT(FillBnInstructionInfo(match, result), IsOk());
-  EXPECT_EQ(result.branchCount, 0);
+  EXPECT_EQ(Info(kCondIndirectJumpPacket).branchCount, 0);
 }
 
 TEST_F(InsnUtilTest, DisasmsIndirectJumps) {
-  ASSERT_OK_AND_ASSIGN(PacketDb::InsnInfo match, db_.Lookup(kCondIndirectJump));
-  EXPECT_THAT(Disasm(match), Eq("  if (P0) jumpr:nt R0 }"));
+  EXPECT_THAT(Disasm(kCondIndirectJumpPacket), Eq("{ R1 = add(R1,R1)\n"
+                                                  "  if (P0) jumpr:nt R0 }"));
 }
 
 } // namespace

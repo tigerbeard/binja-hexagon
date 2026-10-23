@@ -33,6 +33,14 @@ public:
 
   absl::StatusOr<Packet> DecodePacket(absl::Span<const uint32_t> words);
 
+  // Decodes the packet that starts at |data|, reading at most
+  // kMaxPacketBytes. A packet whose end-of-packet marker is not within that
+  // limit fails to decode.
+  absl::StatusOr<Packet> DecodePacketAt(const uint8_t *data, size_t len);
+
+  // A packet holds at most four instruction words.
+  static constexpr size_t kMaxPacketBytes = 16;
+
 private:
   Decoder();
 };

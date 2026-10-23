@@ -19,6 +19,7 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include <vector>
 
 #include "absl/memory/memory.h"
@@ -177,6 +178,11 @@ public:
   int AddDestWriteOnlyPredReg(int reg);
   int AddDestReadWritePredReg(int reg);
 
+  // Writes |value| to the predicate temp |temp| (from AddDest*PredReg).
+  // Several writes to one predicate in a packet are ANDed together, as the
+  // hardware does.
+  void WritePredicate(int temp, BinaryNinja::ExprId value);
+
   // Adds IL instructions that write back all clobbered registers.
   void WriteClobberedRegs();
 
@@ -186,4 +192,6 @@ private:
   BinaryNinja::LowLevelILFunction &il_;
   // Ordered by register, so write-back order is the same on every platform.
   std::map<int, std::unique_ptr<TempReg>> regs_;
+  // Predicate temps written so far in the packet.
+  std::set<int> written_predicates_;
 };

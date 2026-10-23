@@ -120,6 +120,13 @@ int PacketContext::AddDestReg(bool rw, int size, int reg) {
   return it->second->Reg();
 }
 
+void PacketContext::WritePredicate(int temp, ExprId value) {
+  if (!written_predicates_.insert(temp).second) {
+    value = il_.And(1, il_.Register(1, temp), value);
+  }
+  il_.AddInstruction(il_.SetRegister(1, temp, value));
+}
+
 void PacketContext::WriteClobberedRegs() {
   // Single registers are written back before pairs. A packet may write a
   // register and a pair containing it only under complementary predicates;

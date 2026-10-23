@@ -1795,6 +1795,13 @@ class SemanticsTreeTransformer(Transformer):
     raise ValueError('Unexpected grammar rule in insn semantics')
 
 
+def is_predicate_dest(reg):
+  # Predicate destinations: Pd4/Pe4 operands, and P0-P3 written implicitly
+  # (fWRITE_P0..fWRITE_P3). Read-write Px4 instructions combine the old value
+  # in their own semantics.
+  return re.fullmatch(r'P[de]V|Pd[0-3]', reg) is not None
+
+
 def is_pair_operand(op):
   # Register operands are a type letter, a register id and V (old value) or
   # N (new value): RdV, RssV, RxxV. A doubled id letter is a register pair.
@@ -2135,6 +2142,10 @@ def gen_il_func(tag, regs, imms):
     if isinstance(il_insn, IlBranch):
       # Branch instructions are deferred to the end of the packet.
       continue
+    elif isinstance(il_insn, IlSetRegister) and is_predicate_dest(il_insn.reg):
+      # The packet ANDs a predicate's writes together.
+      lines.append('''ctx.WritePredicate({0}, {1});'''.format(
+          il_insn.reg, il_insn.val))
     elif isinstance(il_insn, IlExprId):
       lines.append('''il.AddInstruction({0});'''.format(il_insn))
     elif isinstance(il_insn, IlLabel):

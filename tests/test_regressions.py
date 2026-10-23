@@ -360,14 +360,12 @@ f:
   def test_two_output_intrinsic_writes_both(self):
     f = self.analyse('''
 f:
-  { r1:0 = add(r3:2, r5:4, p0):carry }
+  { r0, p0 = sfrecipa(r1, r2) }
   { jumpr r31 }
 ''')['f']
     il = hexasm.llil(f)
-    self.assertRegex(
-        il, r'temp#\d+, temp#\d+ = A4_addp_c\(temp#\d+\.q, temp#\d+\.q, '
-        r'temp#\d+\.b\)')
-    self.assertIn('R1:R0 = ', il)
+    self.assertRegex(il, r'temp#\d+, temp#\d+ = F2_sfrecipa\(R1, R2\)')
+    self.assertIn('R0 = ', il)
     self.assertIn('P0 = ', il)
 
 
@@ -1196,6 +1194,36 @@ float result = fconvert.s(R5:R4)
 if (R5:R4 > R3:R2)
     return float.s((int.q(ftrunc.s(result))).d)
 return result''')
+
+
+class TestDspInstructions(SnippetTest):
+  # #48: vector word compares (fSETBITS), rounding, carries, clipping and
+  # dfmake. The carry is the full adder's, from the operands' and the sum's
+  # top bits, with the carry-in predicate's low bit.
+
+  SOURCE = '''
+f:
+  { p0 = vcmpw.eq(r1:0, r3:2) }
+  { r4 = round(r5, #4) }
+  { r1:0 = add(r3:2, r5:4, p1):carry }
+  { r6 = clip(r7, #7) }
+  { r11:10 = dfmake(#1):pos }
+  { jumpr r31 }
+'''
+
+  def test_lifts_dsp_instructions(self):
+    il = hexasm.llil(self.analyse(self.SOURCE)['f'])
+    for text in (
+        'temp#0.b = (temp#0.b & 0xf0) | (neg.b(sx.q(temp#1.q.d) == '
+        'sx.q(temp#2.q.d) ? 1 : 0) & 0xf)',
+        'temp#3.d = ((sx.q(R5) + sx.q(1 << (4 - 1))) s>> 4).d',
+        'temp#6.q = temp#2.q + temp#4.q + sx.q(zx.d(temp#5.b & 1))',
+        'temp#5.b = ((temp#2.q & temp#4.q) | ((temp#2.q | temp#4.q) & '
+        'not.q(temp#2.q + temp#4.q + sx.q(zx.d(temp#5.b & 1))))) u>> 0x3f != 0',
+        'temp#8.q = temp#8.q + (1 << 0x2e)'):
+      self.assertIn(text, il)
+    self.assertNotIn('A4_addp_c', il)
+    self.assertNotIn('A7_clip', il)
 
 
 class TestQemuCases(SnippetTest):

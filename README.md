@@ -49,10 +49,10 @@ version from V5 on.
 
 Each packet is one Binary Ninja instruction. Of the 2,774 instructions:
 
-*   1,582 are lifted to LLIL with their semantics. That is 88% of the 1,789
+*   1,620 are lifted to LLIL with their semantics. That is 91% of the 1,789
     scalar instructions, including floating point as Binary Ninja's float IL;
     no HVX, HMX or HLX instruction is.
-*   1,189 are lifted as intrinsics (204 scalar, 664 HVX, 147 HMX, 174 HLX).
+*   1,151 are lifted as intrinsics (166 scalar, 664 HVX, 147 HMX, 174 HLX).
     Their general registers and data flow are right, but the operation is
     opaque; HVX, HMX and HLX registers are not modelled. 285 of them load or
     store memory.

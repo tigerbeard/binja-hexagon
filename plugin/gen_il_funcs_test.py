@@ -654,6 +654,15 @@ ATTRIBUTES( \
     "ATTRIBS()" \
 )
 SEMANTICS( \
+    "A4_boundscheck_lo", \
+    "Pd4=boundscheck(Rs32,Rt32)", \
+    \"\"\"{ PdV = f8BITSOF((fCAST4u(RsV) >= RtV) && (fCAST4u(RsV) < RtV)); }\"\"\" \
+)
+ATTRIBUTES( \
+    "A4_boundscheck_lo", \
+    "ATTRIBS()" \
+)
+SEMANTICS( \
     "F2_sfadd", \
     "Rd32=sfadd(Rs32,Rt32)", \
     \"\"\"{ RdV=fUNFLOAT(fFLOAT(RsV)+fFLOAT(RtV));}\"\"\" \
@@ -738,6 +747,34 @@ class TestGenIlFunc(unittest.TestCase):
       ]
     self.assertEqual(len(parts), 1)
     return process_semantics(tag, parts[0])
+
+  def test_literal_suffixes_keep_their_type(self):
+    self.assertEqual(type_literals('(1023ULL - 6) << 52; x = 1LL; y = 0x80U; 7'),
+                     '(fCAST8u(1023) - 6) << 52; x = fCAST8s(1); '
+                     'y = fCAST4u(0x80); 7')
+
+  def test_every_hide_declaration_is_found(self):
+    # The word after one fHIDE(...) is the next fHIDE.
+    self.assertEqual(
+        local_declarations('fHIDE(int xv;) fHIDE(int sv;) fHIDE(int) width=1;'),
+        {'xv': (4, True), 'sv': (4, True), 'width': (4, True)})
+
+  def test_logical_and_is_a_ternary(self):
+    self.assertEqual(
+        self.parse_semantics('A4_boundscheck_lo'), [
+            RawC('{ LowLevelILLabel true_case, false_case, done;'),
+            IlIf(IlCompareUnsignedGreaterEqual(
+                4, IlRegister(4, 'RsV'), IlRegister(4, 'RtV')), 'true_case',
+                 'false_case'),
+            IlLabel('true_case'),
+            IlSetRegister(1, 'PdV', IlCompareUnsignedLessThan(
+                4, IlRegister(4, 'RsV'), IlRegister(4, 'RtV'))),
+            IlGoto('done'),
+            IlLabel('false_case'),
+            IlSetRegister(1, 'PdV', IlConst(1, 0)),
+            IlLabel('done'),
+            RawC('}'),
+        ])
 
   def test_float_add(self):
     self.assertEqual(
@@ -1507,8 +1544,8 @@ class TestGenIlFunc(unittest.TestCase):
   def test_extract(self):
     self.assertEqual(
         self.parse_semantics('S4_extract'), [
-            IlSetRegister(8, 'WIDTH_REG', IlConst(4, 'uiV')),
-            IlSetRegister(8, 'OFFSET_REG', IlConst(4, 'UiV')),
+            IlSetRegister(8, 'WIDTH_REG', IlConst(8, 'uiV')),
+            IlSetRegister(8, 'OFFSET_REG', IlConst(8, 'UiV')),
             IlSetRegister(
                 4, 'RdV',
                 IlSub(

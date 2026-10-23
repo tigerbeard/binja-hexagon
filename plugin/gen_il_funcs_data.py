@@ -281,6 +281,18 @@ SUPPORTED_TAGS = [
     'F2_conv_sf2w', 'F2_conv_sf2w_chop', 'F2_conv_sf2uw', 'F2_conv_sf2uw_chop',
     'F2_conv_sf2d', 'F2_conv_sf2d_chop', 'F2_conv_df2w', 'F2_conv_df2w_chop',
     'F2_conv_df2uw', 'F2_conv_df2uw_chop', 'F2_conv_df2d', 'F2_conv_df2d_chop',
+    # Vector word compares (fSETBITS), halfword shifts by a register amount,
+    # saturating shifts and adds, rounding (round, cround, :crnd averages),
+    # clipping, carries, table indexes, bounds checks and dfmake.
+    'A2_vcmpweq', 'A2_vcmpwgt', 'A2_vcmpwgtu', 'A4_vcmpweqi', 'A4_vcmpwgti',
+    'A4_vcmpwgtui', 'S2_asr_r_vh', 'S2_asl_r_vh', 'S2_lsr_r_vh', 'S2_lsl_r_vh',
+    'S2_asr_r_r_sat', 'S2_asl_r_r_sat', 'S2_asr_i_p_rnd', 'A2_addpsat',
+    'A2_roundsat', 'A4_round_ri', 'A4_round_rr', 'A4_round_ri_sat',
+    'A4_round_rr_sat', 'A4_cround_ri', 'A4_cround_rr', 'A2_vavgwcr',
+    'A2_vavghcr', 'A2_vnavgwcr', 'A2_vnavghcr', 'A7_clip', 'A7_vclip',
+    'A4_addp_c', 'A4_subp_c', 'S2_tableidxb', 'S2_tableidxh', 'S2_tableidxw',
+    'S2_tableidxd', 'A4_boundscheck_hi', 'A4_boundscheck_lo', 'A5_ACS',
+    'F2_dfimm_p', 'F2_dfimm_n',
     # Shifts by a register amount, which shift the other way when the amount
     # is negative, and register-amount bit operations.
     'S2_asl_r_r', 'S2_asl_r_r_acc', 'S2_asl_r_r_nac', 'S2_asl_r_r_and',

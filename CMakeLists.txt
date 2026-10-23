@@ -22,7 +22,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 # Generators, generator tests and headless tests all run on this interpreter.
-# It needs lark-parser and pcpp (requirements.txt); binaryninja-api needs >= 3.12.
+# It needs lark and pcpp (requirements.txt); binaryninja-api needs >= 3.12.
 find_package(Python3 3.12 COMPONENTS Interpreter REQUIRED)
 
 # Binary Ninja installation, for the headless tests' Python path and the

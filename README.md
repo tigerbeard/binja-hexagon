@@ -45,7 +45,7 @@ Qualcomm Innovation Center.
 Instruction lifters are [auto generated](/plugin/gen_il_funcs.py) by parsing
 semantics descriptions. These descriptions are preprocessed using
 [PCPP](https://github.com/ned14/pcpp) by Niall Douglas and David Beazley, and
-parsed using [Lark-parser](https://github.com/lark-parser/lark) by Erez Shinan.
+parsed using [Lark](https://github.com/lark-parser/lark) by Erez Shinan.
 
 ## License
 

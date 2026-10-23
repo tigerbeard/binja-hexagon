@@ -26,6 +26,8 @@ import sys
 import unittest
 
 import hexasm
+import llvm_diff
+import qemu_oracle
 
 try:
   import binaryninja as binja
@@ -204,7 +206,7 @@ f:
     il = hexasm.llil(f)
     self.assertIn('temp#1.q = R5:R4', il)
     self.assertIn('temp#2.q = 8', il)
-    self.assertIn('(temp#1.q & ((sx.q(1) << temp#2.q) - 1))', il)
+    self.assertIn('(temp#1.q & ((1 << temp#2.q) - 1))', il)
 
   def test_register_and_pair_in_one_packet_keep_separate_temps(self):
     # #2: R0 and R1:0 written in one packet shared a temp, and R1 was lost.
@@ -404,7 +406,6 @@ f:
     self.assertIn('22: R6_release_at_vi(R2)', il)
 
   def test_matches_llvm_for_all_ll_sc_and_acquire_release_encodings(self):
-    import llvm_diff
     words = [w for tag, w in llvm_diff.pattern_words(
         r'locked|_aq$|_rl_|^R6_release|L4_loadw_phys|Y5_l2locka')]
     self.assertGreaterEqual(len(words), 13)
@@ -456,7 +457,6 @@ f:
     self.assertTrue(il.endswith('<return> jump(LR)'), il)
 
   def test_matches_llvm_for_new_encodings(self):
-    import llvm_diff
     words = [w for tag, w in llvm_diff.pattern_words(
         r'_(qf16|qf32|hf|sf|bf)(_|$)|qfext|^V6_valign4$|^V6_vmerge_qf$|'
         r'_tmp$|^J2_(callrh|jumprh|unpause|pause)$|^Y2_tlbpp$|'
@@ -481,7 +481,6 @@ f:
 { R5 = sub(R23,R26):sat:deprecated }
 { R25:24 = packhl(R5,R18):deprecated }
 { jumpr LR }''')
-    import llvm_diff
     words = [w for tag, w in llvm_diff.pattern_words(r'_deprecated$')]
     self.assertEqual(len(words), 3)
     self.assertEqual(llvm_diff.compare(binja, words), [])
@@ -1008,6 +1007,28 @@ f:
     hlil = hexasm.hlil(f)
     self.assertNotIn('temp#', hlil)
     self.assertNotIn('0xffffffff00000000', hlil)
+
+
+@unittest.skipUnless(qemu_oracle.available(), 'needs qemu-system-hexagon')
+class TestAgainstQemu(SnippetTest):
+  # Every lifted instruction that qemu_diff.py can run (no branches, memory,
+  # system or HVX instructions) agrees with QEMU on random encodings and
+  # registers. This found lifts that a 32-bit literal or mask broke:
+  # mpy(Rs,Rt):rnd, extract(u) on pairs and vspliceb.
+
+  def test_lifted_instructions_match_qemu(self):
+    import qemu_diff
+    namespace = {}
+    with open(llvm_diff.DEFAULT_ISET) as f:
+      exec(f.read(), namespace)
+    iset = namespace['iset']
+    attribs = qemu_diff.op_attribs()
+    tags = [t for t in qemu_diff.lifted_tags()
+            if qemu_diff.testable(t, attribs, iset)]
+    self.assertGreater(len(tags), 340)
+    problems = qemu_diff.compare(binja, qemu_diff.cases_for(tags, iset, 4))
+    self.assertEqual(
+        {tag: texts[0] for tag, texts in problems.items()}, {})
 
 
 if __name__ == '__main__':

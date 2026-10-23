@@ -84,7 +84,10 @@ This runs the C++ unit tests, the code generator tests and the headless
 end-to-end and regression tests. The headless tests, labelled `bn`, load the
 plugin from the user plugins directory and check that it is this build's
 library. Headless use needs a Binary Ninja license that allows it (Commercial
-or above). The regression tests also need LLVM's `llvm-mc`.
+or above). The regression tests also need LLVM's `llvm-mc`, and compare the
+lifted IL with QEMU's `qemu-system-hexagon` when it is installed (set
+`QEMU_HEXAGON` if it is not on `PATH`). `tests/qemu_diff.py` runs that
+comparison on its own, for chosen instructions and more random cases.
 
 Without Binary Ninja, configure with `-DBN_ALLOW_STUBS=ON` and leave out the
 `bn` tests:

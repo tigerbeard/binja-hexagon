@@ -29,6 +29,9 @@ namespace {
 
 using namespace BinaryNinja;
 
+// The key of |reg|'s temp in |subspace|, in PacketContext::regs_.
+int TempKey(int subspace, int reg) { return subspace * NUM_HEX_REGS + reg; }
+
 std::unique_ptr<TempReg> MakeTempReg(bool rw, int size, int reg, int subspace,
                                      LowLevelILFunction &il) {
   if (rw) {
@@ -112,7 +115,7 @@ int PacketContext::AddDestReg(bool rw, int size, int reg) {
   // Pairs have their own subspace, so a packet that writes both a register
   // and a pair containing it keeps two temps.
   const int subspace = size == 8 ? kDestPairSubspace : kSingleRegSubspace;
-  const int key = subspace * NUM_HEX_REGS + reg;
+  const int key = TempKey(subspace, reg);
   auto it = regs_.find(key);
   if (it == regs_.end()) {
     it = regs_.emplace(key, MakeTempReg(rw, size, reg, subspace, il_)).first;
@@ -160,23 +163,23 @@ bool PacketContext::Writes(int reg) const {
   if (reg == HEX_REG_SP || reg == HEX_REG_FP || reg == HEX_REG_LR) {
     return true;
   }
-  if (regs_.count(kSingleRegSubspace * NUM_HEX_REGS + reg)) {
+  if (regs_.count(TempKey(kSingleRegSubspace, reg))) {
     return true;
   }
   if (reg >= HEX_REG_P0 && reg <= HEX_REG_P3) {
     // The predicates are parts of C4 (P3:0).
-    return regs_.count(kSingleRegSubspace * NUM_HEX_REGS + HEX_REG_P3_0) > 0;
+    return regs_.count(TempKey(kSingleRegSubspace, HEX_REG_P3_0)) > 0;
   }
   if (reg == HEX_REG_P3_0) {
     for (int p = HEX_REG_P0; p <= HEX_REG_P3; p++) {
-      if (regs_.count(kSingleRegSubspace * NUM_HEX_REGS + p)) {
+      if (regs_.count(TempKey(kSingleRegSubspace, p))) {
         return true;
       }
     }
     return false;
   }
   // A destination pair that contains the register.
-  return regs_.count(kDestPairSubspace * NUM_HEX_REGS + (reg & ~1)) > 0;
+  return regs_.count(TempKey(kDestPairSubspace, reg & ~1)) > 0;
 }
 
 size_t TempRegSize(uint32_t index) {

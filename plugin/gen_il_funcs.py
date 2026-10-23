@@ -2147,6 +2147,114 @@ def gen_il_func(tag, regs, imms):
   return '\n'.join(lines)
 
 
+# Opcodes without lifted semantics are lifted as intrinsics (plugin/
+# intrinsics.h). Their operands come from these register types: general,
+# control and predicate registers, new-value sources and the modifier
+# registers (C6, C7). HVX vector and predicate registers, and system and guest
+# registers, are not Binary Ninja registers and are left out.
+INTRINSIC_REG_TYPES = 'RCPNM'
+MAX_INTRINSIC_INPUTS = 12
+MAX_INTRINSIC_OUTPUTS = 6
+
+# Unlifted opcodes that are not intrinsics, and what they lift to.
+SPECIAL_LIFTS = {
+    # A hint for indirect jump prediction, with no other effect.
+    'J4_hintjumpr': ['il.AddInstruction(il.Nop());'],
+    # Trap to the guest operating system.
+    'J2_trap1': ['il.AddInstruction(il.SystemCall());'],
+    # Return from exception, to ELR, which is not modelled.
+    'J2_rte': ['il.AddInstruction(il.Unimplemented());'],
+}
+
+
+def intrinsic_operands(tag, regs, imms):
+  """Returns the declarations, inputs and outputs of an intrinsic lifter.
+
+  Inputs are (name, size, C++ expression) and outputs (name, size, C++
+  register variable). Destinations go through PacketContext temps, so packet
+  semantics hold. A predicated instruction's destinations also come in as
+  inputs, because a cancelled instruction leaves them unchanged.
+  """
+  predicated = 'A_CONDEXEC' in attribdict[tag]
+  decls, inputs, outputs = [], [], []
+  for i, (regtype, regid, _, _) in enumerate(regs):
+    if regtype not in INTRINSIC_REG_TYPES:
+      continue
+    name = regtype + regid
+    if regtype == 'M':
+      inputs.append(
+          (name, 4, 'il.Register(4, HEX_REG_M0 + insn.regno[{}])'.format(i)))
+      continue
+    if regtype == 'N':
+      # New-value source: the producer's temp in this packet.
+      var = 'N{}N'.format(regid)
+      decls.append(
+          "const int {0} = ctx.AddDestWriteOnlyReg(MapRegNum('N', insn.regno[{1}]));"
+          .format(var, i))
+      inputs.append((name, 4, 'il.Register(4, {})'.format(var)))
+      continue
+    mapped = "MapRegNum('{}', insn.regno[{}])".format(regtype, i)
+    var = '{}{}V'.format(regtype, regid)
+    if regtype == 'P':
+      size, kind = 1, 'PredReg'
+    elif is_pair(regid):
+      size, kind = 8, 'RegPair'
+    else:
+      size, kind = 4, 'Reg'
+    if is_written(regid):
+      rw = is_readwrite(regid) or predicated
+      decls.append('const int {} = ctx.AddDest{}{}({});'.format(
+          var, 'ReadWrite' if rw else 'WriteOnly', kind, mapped))
+      if rw:
+        inputs.append((name, size, 'il.Register({}, {})'.format(size, var)))
+      outputs.append((name, size, var))
+    elif size == 8:
+      decls.append(
+          'SourcePairReg tmp_{0}({1}, il);\nconst int {0} = tmp_{0}.Reg();'
+          .format(var, mapped))
+      inputs.append((name, 8, 'il.Register(8, {})'.format(var)))
+    else:
+      inputs.append(
+          (name, size, 'il.Register({}, {})'.format(size, mapped)))
+  for n in range(4):
+    if 'A_IMPLICIT_WRITES_P{}'.format(n) in attribdict[tag]:
+      var = 'P{}_implicit'.format(n)
+      decls.append('const int {} = ctx.AddDest{}PredReg(HEX_REG_P{});'.format(
+          var, 'ReadWrite' if predicated else 'WriteOnly', n))
+      if predicated:
+        inputs.append(('P{}'.format(n), 1, 'il.Register(1, {})'.format(var)))
+      outputs.append(('P{}'.format(n), 1, var))
+  for immlett, bits, _ in imms:
+    inputs.append(('#{}{}'.format(immlett, bits), 4, 'il.Const(4, insn.immed[{}])'
+                   .format(1 if immlett.isupper() else 0)))
+  assert len(inputs) <= MAX_INTRINSIC_INPUTS, tag
+  assert len(outputs) <= MAX_INTRINSIC_OUTPUTS, tag
+  return decls, inputs, outputs
+
+
+def gen_intrinsic_func(tag, regs, imms):
+  if tag in SPECIAL_LIFTS:
+    return '\n'.join(SPECIAL_LIFTS[tag])
+  decls, inputs, outputs = intrinsic_operands(tag, regs, imms)
+  return '\n'.join(decls + [
+      'il.AddInstruction(il.Intrinsic({{{0}}}, {1}, {{{2}}}));'.format(
+          ', '.join('RegisterOrFlag::Register({})'.format(o[2])
+                    for o in outputs), tag, ', '.join(i[2] for i in inputs))
+  ])
+
+
+def gen_intrinsic_info(tag, regs, imms):
+  """Returns the opcode_intrinsics entry of a tag (plugin/intrinsics.h)."""
+  if tag in SPECIAL_LIFTS:
+    return '{false}'
+  _, inputs, outputs = intrinsic_operands(tag, regs, imms)
+  memory = 'A_LOAD' in attribdict[tag] or 'A_STORE' in attribdict[tag]
+  operands = lambda ops: ', '.join('{{"{}", {}}}'.format(o[0], o[1]) for o in ops)
+  return '{{true, {0}, {1}, {2}, {{{3}}}, {{{4}}}}}'.format(
+      'true' if memory else 'false', len(inputs), len(outputs),
+      operands(inputs), operands(outputs))
+
+
 def main():
   read_semantics_file(sys.argv[1])
   read_attribs_file(sys.argv[2])
@@ -2159,12 +2267,14 @@ def main():
 
   f.write('''
 #include "binaryninjaapi.h"
+#include "lowlevelilinstruction.h"
 #include "third_party/qemu-hexagon/attribs.h"
 #include "third_party/qemu-hexagon/iclass.h"
 #include "third_party/qemu-hexagon/insn.h"
 #include "third_party/qemu-hexagon/opcodes.h"
 #include "plugin/packet_context.h"
 #include "plugin/hex_regs.h"
+#include "plugin/intrinsics.h"
 #include "glog/logging.h"
 
 using namespace BinaryNinja;
@@ -2190,6 +2300,26 @@ using namespace BinaryNinja;
     f.write(gen_il_func(tag, tagregs[tag], tagimms[tag]))
     f.write('}\n\n')
 
+  supported_set = set(SUPPORTED_TAGS)
+  intrinsic_tags = [tag for tag in tags if tag not in supported_set]
+  for tag in intrinsic_tags:
+    f.write('''/*\n{0}: {1} (intrinsic)\n*/\n'''.format(tag, behdict[tag]))
+    f.write('''void lift_{0}(Architecture *arch,
+                             uint64_t pc,
+                             const Packet &pkt,
+                             const Insn &insn,
+                             int insn_num,
+                             PacketContext &ctx) {{
+                LowLevelILFunction &il = ctx.IL();\n'''.format(tag))
+    f.write(gen_intrinsic_func(tag, tagregs[tag], tagimms[tag]))
+    f.write('\n}\n\n')
+
+  f.write('extern const IntrinsicInfo opcode_intrinsics[XX_LAST_OPCODE] = {\n')
+  for tag in intrinsic_tags:
+    f.write('[{0}] = {1},\n'.format(
+        tag, gen_intrinsic_info(tag, tagregs[tag], tagimms[tag])))
+  f.write('};\n\n')
+
   f.write('''typedef void (*IlLiftFunc)(Architecture *arch,
                                         uint64_t pc,
                                         const Packet &pkt,
@@ -2197,12 +2327,8 @@ using namespace BinaryNinja;
                                         int insn_num,
                                         PacketContext &ctx);\n\n''')
   f.write('extern const IlLiftFunc opcode_liftptr[XX_LAST_OPCODE] = {\n')
-  supported_set = set(SUPPORTED_TAGS)
   for tag in tags:
-    if tag in supported_set:
-      f.write('[{0}] = lift_{0},\n'.format(tag))
-    else:
-      f.write('[{0}] = nullptr,\n'.format(tag))
+    f.write('[{0}] = lift_{0},\n'.format(tag))
   f.write('};\n')
 
   realf = open(sys.argv[3], 'w')

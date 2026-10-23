@@ -22,6 +22,7 @@
 #include "plugin/hex_regs.h"
 #include "plugin/il_util.h"
 #include "plugin/insn_util.h"
+#include "plugin/intrinsics.h"
 #include "plugin/packet_context.h"
 #include "plugin/decoder.h"
 #include "plugin/relocs.h"
@@ -272,6 +273,55 @@ public:
       LOG(ERROR) << "Unexpected GetRegisterInfo for reg " << reg;
     }
     return BNRegisterInfo{reg, 0, 4, NoExtend};
+  }
+
+  // Opcodes without lifted semantics are intrinsics; see plugin/intrinsics.h.
+  std::vector<uint32_t> GetAllIntrinsics() override {
+    std::vector<uint32_t> result;
+    for (uint32_t opcode = 0; opcode < XX_LAST_OPCODE; opcode++) {
+      if (opcode_intrinsics[opcode].valid) {
+        result.push_back(opcode);
+      }
+    }
+    return result;
+  }
+
+  std::string GetIntrinsicName(uint32_t intrinsic) override {
+    if (intrinsic >= XX_LAST_OPCODE || !opcode_intrinsics[intrinsic].valid) {
+      return "";
+    }
+    return opcode_names[intrinsic];
+  }
+
+  BNIntrinsicClass GetIntrinsicClass(uint32_t intrinsic) override {
+    if (intrinsic < XX_LAST_OPCODE && opcode_intrinsics[intrinsic].memory) {
+      return MemoryIntrinsicClass;
+    }
+    return GeneralIntrinsicClass;
+  }
+
+  std::vector<NameAndType> GetIntrinsicInputs(uint32_t intrinsic) override {
+    std::vector<NameAndType> result;
+    if (intrinsic < XX_LAST_OPCODE) {
+      const IntrinsicInfo &info = opcode_intrinsics[intrinsic];
+      for (int i = 0; i < info.num_inputs; i++) {
+        result.emplace_back(info.inputs[i].name,
+                            Type::IntegerType(info.inputs[i].size, false));
+      }
+    }
+    return result;
+  }
+
+  std::vector<Confidence<Ref<Type>>>
+  GetIntrinsicOutputs(uint32_t intrinsic) override {
+    std::vector<Confidence<Ref<Type>>> result;
+    if (intrinsic < XX_LAST_OPCODE) {
+      const IntrinsicInfo &info = opcode_intrinsics[intrinsic];
+      for (int i = 0; i < info.num_outputs; i++) {
+        result.emplace_back(Type::IntegerType(info.outputs[i].size, false));
+      }
+    }
+    return result;
   }
 
   uint32_t GetStackPointerRegister() override { return HEX_REG_SP; }

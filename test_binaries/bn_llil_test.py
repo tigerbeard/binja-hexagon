@@ -221,7 +221,7 @@ jump 0x20174 }
         self.list_llil(func), '''
 0: temp1.d = R1 + R1
 1: R1 = temp1.d
-2: jump(0x20174 => 3 @ 0x20174)
+2: goto 3 @ 0x20174
 3: temp0.d = 1
 4: R0 = temp0.d
 5: <return> jump(LR)''')
@@ -236,14 +236,14 @@ if (P0) jump:t 0x20184 }
 { R0 = #0x0; jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp211.b = 0
+0: temp313.b = 0
 1: temp1.d = R1 + R1
 2: if (P0) then 3 else 5
-3: temp211.b = 1
+3: temp313.b = 1
 4: goto 5
 5: R1 = temp1.d
-6: if (temp211.b == 1) then 7 else 8
-7: jump(0x20184 => 9 @ 0x20184)
+6: if (P0) then 7 else 8
+7: goto 9 @ 0x20184
 8: goto 12 @ 0x20180
 9: temp0.d = 1
 10: R0 = temp0.d
@@ -263,15 +263,15 @@ R1 = add(R1,R1) }
 { R0 = #0x2; jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp210.b = 0
+0: temp312.b = 0
 1: if (P0) then 2 else 4
-2: temp210.b = 1
+2: temp312.b = 1
 3: goto 4
 4: temp1.d = R1 + R1
 5: R1 = temp1.d
-6: if (temp210.b == 1) then 7 else 8
-7: jump(0x20194 => 9 @ 0x20194, 12 @ 0x20198)
-8: jump(0x20198)
+6: if (P0) then 7 else 8
+7: goto 9 @ 0x20194
+8: goto 12 @ 0x20198
 9: temp0.d = 1
 10: R0 = temp0.d
 11: <return> jump(LR)
@@ -291,27 +291,27 @@ R1 = add(R1,R1) }
 { R1 = #0x2; jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp210.b = 0
-1: temp211.b = 0
+0: temp312.b = 0
+1: temp313.b = 0
 2: if (P0) then 3 else 5
-3: temp210.b = 1
+3: temp312.b = 1
 4: goto 5
 5: if (not.b(P1)) then 6 else 8
-6: temp211.b = 1
+6: temp313.b = 1
 7: goto 8
 8: temp1.d = R1 + R1
 9: R1 = temp1.d
-10: if (temp210.b == 1) then 11 else 12
-11: jump(0x201ac => 13 @ 0x201ac, 16 @ 0x201b0)
-12: if (temp211.b == 1) then 19 else 20
+10: if (P0) then 11 else 12
+11: goto 13 @ 0x201ac
+12: if (not.b(P1)) then 16 else 17
 13: temp0.d = 1
 14: R0 = temp0.d
 15: <return> jump(LR)
-16: temp1.d = 2
-17: R1 = temp1.d
-18: <return> jump(LR)
-19: jump(0x201b0)
-20: goto 21 @ 0x201a8
+16: goto 18 @ 0x201b0
+17: goto 21 @ 0x201a8
+18: temp1.d = 2
+19: R1 = temp1.d
+20: <return> jump(LR)
 21: temp0.d = 0
 22: R0 = temp0.d
 23: <return> jump(LR)''')
@@ -359,13 +359,13 @@ R1 = add(R1,R1) }
 { R0 = #0x0; jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp210.b = 0
+0: temp312.b = 0
 1: if (P0) then 2 else 4
-2: temp210.b = 1
+2: temp312.b = 1
 3: goto 4
 4: temp1.d = R1 + R1
 5: R1 = temp1.d
-6: if (temp210.b == 1) then 7 else 9 @ 0x201e4
+6: if (P0) then 7 else 9 @ 0x201e4
 7: call(0x201e8)
 8: goto 9 @ 0x201e4
 9: temp0.d = 0
@@ -378,24 +378,20 @@ R1 = add(R1,R1) }
         self.list_asm(func), '''
 { if (P0) call 0x201f8
 jump 0x201fc
-R1 = add(R1,R1) }
-{ R0 = #0x2; jumpr LR }''')
+R1 = add(R1,R1) }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp210.b = 0
+0: temp312.b = 0
 1: if (P0) then 2 else 4
-2: temp210.b = 1
+2: temp312.b = 1
 3: goto 4
 4: temp1.d = R1 + R1
 5: R1 = temp1.d
-6: if (temp210.b == 1) then 7 else 9
+6: if (P0) then 7 else 9
 7: call(0x201f8)
 8: goto 10
-9: jump(0x201fc => 11 @ 0x201fc)
-10: <return> tailcall(0x201f8)
-11: temp0.d = 2
-12: R0 = temp0.d
-13: <return> jump(LR)''')
+9: <return> tailcall(0x201fc)
+10: <return> tailcall(0x201f8)''')
 
   def test_dualjump_cmp_jump(self):
     func = self.get_function('test_dualjump_cmp_jump')
@@ -407,17 +403,17 @@ P0 = cmp.eq(R3,#0x2);if (P0.new) jump:t 0x2020c }
 { R0 = #0x0; jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp212.b = 0
+0: temp314.b = 0
 1: temp90.b = P0
 2: temp90.b = R3 == 2
 3: temp1.d = R1 + R1
 4: if (temp90.b & 1) then 5 else 7
-5: temp212.b = 1
+5: temp314.b = 1
 6: goto 7
 7: R1 = temp1.d
 8: P0 = temp90.b
-9: if (temp212.b == 1) then 10 else 11
-10: jump(0x2020c => 12 @ 0x2020c)
+9: if (temp90.b & 1) then 10 else 11
+10: goto 12 @ 0x2020c
 11: goto 15 @ 0x20208
 12: temp0.d = 1
 13: R0 = temp0.d
@@ -437,18 +433,18 @@ R1 = add(R1,R1) }
 { R0 = #0x2; jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp211.b = 0
+0: temp313.b = 0
 1: temp90.b = P0
 2: temp90.b = R3 == 2
 3: if (temp90.b & 1) then 4 else 6
-4: temp211.b = 1
+4: temp313.b = 1
 5: goto 6
 6: temp1.d = R1 + R1
 7: R1 = temp1.d
 8: P0 = temp90.b
-9: if (temp211.b == 1) then 10 else 11
-10: jump(0x2021c => 12 @ 0x2021c, 15 @ 0x20220)
-11: jump(0x20220)
+9: if (temp90.b & 1) then 10 else 11
+10: goto 12 @ 0x2021c
+11: goto 15 @ 0x20220
 12: temp0.d = 1
 13: R0 = temp0.d
 14: <return> jump(LR)
@@ -468,33 +464,33 @@ R1 = add(R1,R1) }
 { R0 = #0x2; jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp212.b = 0
-1: temp213.b = 0
+0: temp314.b = 0
+1: temp315.b = 0
 2: temp91.b = P1
 3: temp91.b = R3 == 2
 4: temp90.b = P0
 5: temp90.b = R3 == 2
 6: if (temp90.b & 1) then 7 else 9
-7: temp212.b = 1
+7: temp314.b = 1
 8: goto 9
 9: if (temp91.b & 1) then 10 else 12
-10: temp213.b = 1
+10: temp315.b = 1
 11: goto 12
 12: temp1.d = R1 + R1
 13: R1 = temp1.d
 14: P0 = temp90.b
 15: P1 = temp91.b
-16: if (temp212.b == 1) then 17 else 18
-17: jump(0x20234 => 19 @ 0x20234, 22 @ 0x20238)
-18: if (temp213.b == 1) then 25 else 26
+16: if (temp90.b & 1) then 17 else 18
+17: goto 19 @ 0x20234
+18: if (temp91.b & 1) then 22 else 23
 19: temp0.d = 1
 20: R0 = temp0.d
 21: <return> jump(LR)
-22: temp0.d = 2
-23: R0 = temp0.d
-24: <return> jump(LR)
-25: jump(0x20238)
-26: goto 27 @ 0x20230
+22: goto 24 @ 0x20238
+23: goto 27 @ 0x20230
+24: temp0.d = 2
+25: R0 = temp0.d
+26: <return> jump(LR)
 27: temp0.d = 0
 28: R0 = temp0.d
 29: <return> jump(LR)''')
@@ -509,14 +505,14 @@ if (cmp.eq(R1.new,R2)) jump:t 0x20248 }
 { R0 = #0x0; jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp211.b = 0
+0: temp313.b = 0
 1: temp1.d = R1 + R1
 2: if (temp1.d == R2) then 3 else 5
-3: temp211.b = 1
+3: temp313.b = 1
 4: goto 5
 5: R1 = temp1.d
-6: if (temp211.b == 1) then 7 else 8
-7: jump(0x20248 => 9 @ 0x20248)
+6: if (temp1.d == R2) then 7 else 8
+7: goto 9 @ 0x20248
 8: goto 12 @ 0x20244
 9: temp0.d = 1
 10: R0 = temp0.d
@@ -558,15 +554,15 @@ if (P0) jumpr:nt R0 }
 { R0 = #0x0; jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp211.b = 0
+0: temp313.b = 0
 1: temp1.d = R1 + R1
 2: if (P0) then 3 else 6
-3: temp211.b = 1
-4: temp201.d = R0
+3: temp313.b = 1
+4: temp306.d = R0
 5: goto 6
 6: R1 = temp1.d
-7: if (temp211.b == 1) then 8 else 9 @ 0x20264
-8: jump(temp201.d)
+7: if (P0) then 8 else 9 @ 0x20264
+8: jump(temp306.d)
 9: temp0.d = 0
 10: R0 = temp0.d
 11: <return> jump(LR)''')
@@ -594,15 +590,15 @@ if (P0) callr R0 }
 { R0 = #0x0; jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp211.b = 0
+0: temp313.b = 0
 1: temp1.d = R1 + R1
 2: if (P0) then 3 else 6
-3: temp211.b = 1
-4: temp201.d = R0
+3: temp313.b = 1
+4: temp306.d = R0
 5: goto 6
 6: R1 = temp1.d
-7: if (temp211.b == 1) then 8 else 10 @ 0x20278
-8: call(temp201.d)
+7: if (P0) then 8 else 10 @ 0x20278
+8: call(temp306.d)
 9: goto 10 @ 0x20278
 10: temp0.d = 0
 11: R0 = temp0.d
@@ -616,22 +612,22 @@ if (P0) callr R0 }
 { R0 = #0x0; jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp211.b = 0
+0: temp313.b = 0
 1: temp1.d = R1
 2: temp1.d = temp1.d + R1
 3: temp90.b = P0
-4: temp100.d = FP
+4: temp300.d = FP
 5: if (temp90.b) then 6 else 13
-6: temp101.q = [temp100.d].q
-7: temp101.q = temp101.q
-8: LR = sx.q((temp101.q s>> 0x20).d)
-9: FP = sx.q(temp101.q.d)
-10: SP = temp100.d + 8
-11: temp211.b = 1
+6: temp301.q = [temp300.d].q
+7: temp301.q = temp301.q
+8: LR = sx.q((temp301.q s>> 0x20).d)
+9: FP = sx.q(temp301.q.d)
+10: SP = temp300.d + 8
+11: temp313.b = 1
 12: goto 13
 13: R1 = temp1.d
 14: P0 = temp90.b
-15: if (temp211.b == 1) then 16 else 17 @ 0x20280
+15: if (temp90.b) then 16 else 17 @ 0x20280
 16: <return> jump(LR)
 17: temp0.d = 0
 18: R0 = temp0.d

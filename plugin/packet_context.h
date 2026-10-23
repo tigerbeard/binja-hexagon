@@ -18,7 +18,9 @@
 
 #pragma once
 
+#include <functional>
 #include <map>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -186,6 +188,20 @@ public:
   // Adds IL instructions that write back all clobbered registers.
   void WriteClobberedRegs();
 
+  // Records how to rebuild instruction |insn_num|'s branch condition, and the
+  // registers (HEX_REG numbers) the condition reads.
+  void SetBranchCondition(int insn_num,
+                          std::function<BinaryNinja::ExprId()> condition,
+                          std::vector<int> reads);
+
+  // Instruction |insn_num|'s branch condition, rebuilt for the end of the
+  // packet, if the packet left the registers it reads unchanged. The branch
+  // can then test it instead of a branch-taken flag.
+  std::optional<BinaryNinja::ExprId> StableBranchCondition(int insn_num);
+
+  // Whether the packet writes |reg| (a HEX_REG number).
+  bool Writes(int reg) const;
+
 private:
   int AddDestReg(bool rw, int size, int reg);
 
@@ -194,4 +210,9 @@ private:
   std::map<int, std::unique_ptr<TempReg>> regs_;
   // Predicate temps written so far in the packet.
   std::set<int> written_predicates_;
+  struct BranchCondition {
+    std::function<BinaryNinja::ExprId()> build;
+    std::vector<int> reads;
+  };
+  std::map<int, BranchCondition> branch_conditions_;
 };

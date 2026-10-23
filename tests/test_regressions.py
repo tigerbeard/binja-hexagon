@@ -596,5 +596,40 @@ f:
     self.assertIn('bool temp#0 = arg2 == 0 & arg1 == 0', hexasm.hlil(f))
 
 
+class TestBranchConditions(SnippetTest):
+  # #10: every conditional branch set a branch-taken flag and tested it at
+  # the end of the packet, which HLIL kept (`temp210 = 1; if (temp210 == 1)`).
+
+  def test_branch_tests_its_condition(self):
+    f = self.analyse('''
+f:
+  { p0 = cmp.eq(r0, #0) }
+  { r1 = add(r1, r1); if (p0) jump:t .Lone }
+  { r0 = #0; jumpr r31 }
+.Lone:
+  { r0 = #1; jumpr r31 }
+''')['f']
+    self.assertEqual(hexasm.hlil(f), '''
+if (arg1 == 0)
+    return 1
+return 0''')
+
+  def test_flag_kept_when_packet_writes_the_condition(self):
+    # The jump tests P0's old value, and the same packet writes P0.
+    f = self.analyse('''
+f:
+  { p0 = cmp.eq(r1, #5) }
+  { p0 = cmp.eq(r0, #0); if (p0) jump:t .Lone }
+  { r0 = #0; jumpr r31 }
+.Lone:
+  { r0 = #1; jumpr r31 }
+''')['f']
+    self.assertRegex(hexasm.llil(f), r'if \(temp#\d+\.b == 1\)')
+    # The branch follows P0's old value, arg2 == 5, through the flag.
+    hlil = hexasm.hlil(f)
+    self.assertIn('if (arg2 == 5)', hlil)
+    self.assertNotIn('arg1 == 0', hlil)
+
+
 if __name__ == '__main__':
   unittest.main()

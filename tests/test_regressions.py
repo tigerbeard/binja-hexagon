@@ -480,5 +480,95 @@ new_predicate:
     self.assertIn('return 1', hlil)
 
 
+class TestHardwareLoops(SnippetTest):
+  # #7: the packet that ends a hardware loop reported no branch back to the
+  # loop's start, so loops decompiled as straight-line code with a
+  # `jump(&data_...)` at the end.
+
+  def test_counted_loop(self):
+    f = self.analyse('''
+f:
+  { loop0(.Lbody, #10); r1 = #0 }
+.Lbody:
+  { r1 = add(r1, r0) }:endloop0
+  { r0 = r1; jumpr r31 }
+''')['f']
+    self.assertEqual(hexasm.hlil(f), '''
+int32_t LC0 = 0xa
+int32_t result = 0
+while (true)
+    result += arg1
+    if (LC0 s<= 1)
+        break
+    LC0 -= 1
+return result''')
+
+  def test_register_count(self):
+    f = self.analyse('''
+f:
+  { loop0(.Lbody, r1); r2 = #0 }
+.Lbody:
+  { r2 = add(r2, r0) }:endloop0
+  { r0 = r2; jumpr r31 }
+''')['f']
+    self.assertIn('int32_t LC0 = arg2', hexasm.hlil(f))
+    self.assertIn('LC0 -= 1', hexasm.hlil(f))
+
+  NESTED = '''
+int32_t LC1 = 4
+int32_t result = 0
+while (true)
+    int32_t LC0_1 = 3
+    while (true)
+        result += 1
+        if (LC0_1 s<= 1)
+            break
+        LC0_1 -= 1{}
+    if (LC1 s<= 1)
+        break
+    LC1 -= 1
+return result'''
+
+  def test_nested_loops(self):
+    f = self.analyse('''
+f:
+  { loop1(.Louter, #4); r2 = #0 }
+.Louter:
+  { loop0(.Linner, #3) }
+.Linner:
+  { r2 = add(r2, #1) }:endloop0
+  { r2 = add(r2, #10) }:endloop1
+  { r0 = r2; jumpr r31 }
+''')['f']
+    self.assertEqual(hexasm.hlil(f),
+                     self.NESTED.format('\n    result += 0xa'))
+
+  def test_loops_ending_in_one_packet(self):
+    f = self.analyse('''
+f:
+  { loop1(.Louter, #4); r2 = #0 }
+.Louter:
+  { loop0(.Linner, #3) }
+.Linner:
+  { r2 = add(r2, #1) }:endloop01
+  { r0 = r2; jumpr r31 }
+''')['f']
+    self.assertEqual(hexasm.hlil(f), self.NESTED.format(''))
+
+  def test_pipelined_loop_is_a_loop(self):
+    # spNloop0 also counts down LPCFG; its loop end keeps the generic
+    # endloop semantics.
+    f = self.analyse('''
+f:
+  { p3 = sp1loop0(.Lbody, r1); r2 = #0 }
+.Lbody:
+  { r2 = add(r2, r0) }:endloop0
+  { r0 = r2; jumpr r31 }
+''')['f']
+    hlil = hexasm.hlil(f)
+    self.assertRegex(hlil, r'\bwhile\b')
+    self.assertNotIn('jump(', hlil)
+
+
 if __name__ == '__main__':
   unittest.main()

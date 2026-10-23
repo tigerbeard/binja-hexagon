@@ -112,6 +112,18 @@ void tokenize_A2_add(uint64_t pc, const Packet &pkt, const Insn &insn,
     of its packet, and decoding the whole packet from the bytes Binary Ninja
     passes in keeps no state between views.
 
+*   **Hardware loops** ([hw_loops.h](/plugin/hw_loops.h)): `loopN` sets a
+    loop's start; the loop ends at the first later packet whose parse bits
+    mark `endloopN`, which jumps back while the count lasts. Neither packet
+    says where the other is, so each view's code is scanned once for loop
+    setups and ends. While Binary Ninja analyses or lifts a function (the
+    architecture's `AnalyzeBasicBlocks` and `LiftFunction` hooks), the loops
+    are published to the instruction callbacks on that thread: a loop-end
+    packet reports branches to its loop starts, and loops set up by `loopN`
+    lift as `if (LCn > 1) { LCn -= 1; goto start }`. Loops set up by
+    `spNloop0` keep the generic endloop semantics, which also count down
+    USR.LPCFG.
+
 *   **Instruction IL Generator**: [gen_il_funcs.py](/plugin/gen_il_funcs.py)
     parses instruction definitions, and generated code that implements BN's
     [GetInstructionLowLevelIL](https://api.binary.ninja/binaryninja.architecture-module.html?highlight=text#binaryninja.architecture.Architecture.get_instruction_low_level_il)

@@ -27,7 +27,7 @@ except ImportError:
   print('Add ${BN_INSTALL_DIR}/python to PYTHONPATH.')
   sys.exit(1)
 
-from il_test_util import check_environment, normalize_il
+from il_test_util import check_environment, instruction_lines, normalize_il
 
 
 # E2E test for Hexagon llil plugin.
@@ -57,9 +57,8 @@ class TestPluginIl(unittest.TestCase):
   def list_asm(self, func):
     ret = ['']
     for block in func.basic_blocks:
-      for insn in block:
-        # Assemble tokens
-        ret.append(''.join(list(map(str, insn[0]))).strip())
+      for tokens, _ in block:
+        ret.extend(instruction_lines(binja, tokens))
     return '\n'.join(ret)
 
   def list_llil(self, func):

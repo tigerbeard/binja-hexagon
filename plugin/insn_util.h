@@ -22,13 +22,18 @@
 
 #include "absl/status/status.h"
 #include "binaryninjaapi.h"
-#include "plugin/packet_db.h"
+#include "plugin/decoder.h"
 
-absl::Status FillBnInstructionInfo(const PacketDb::InsnInfo &input,
+// Each packet is one Binary Ninja instruction, at address |pc|.
+
+// Fills the length and branches of the packet.
+absl::Status FillBnInstructionInfo(uint64_t pc, const Packet &pkt,
                                    BinaryNinja::InstructionInfo &result);
 
+// Fills the text of the packet: one line per instruction word, each ended by a
+// NewLineToken that carries the word's offset in the packet.
 absl::Status FillBnInstructionTextTokens(
-    const PacketDb::InsnInfo &input, size_t &len,
+    uint64_t pc, const Packet &pkt,
     std::vector<BinaryNinja::InstructionTextToken> &result);
 
 bool IsSubInsn(const Insn &insn);

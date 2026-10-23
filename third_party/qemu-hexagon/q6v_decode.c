@@ -310,6 +310,12 @@ int decode_packet(int max_words, const uint32_t *words, Packet *pkt,
   while (!end_of_packet && (words_read < max_words)) {
     encoding32 = words[words_read];
     end_of_packet = is_packet_end(encoding32);
+    /*
+     * Leave room for a duplex pair and the endloop pseudo-instruction, so a
+     * long run of words without an end-of-packet marker cannot overrun
+     * pkt->insn.
+     */
+    ASSERT_AND_ABORT(num_insns + 3 <= INSTRUCTIONS_MAX);
     new_insns = decode_insns(&pkt->insn[num_insns], encoding32);
     ASSERT_AND_ABORT(new_insns > 0);
     /*

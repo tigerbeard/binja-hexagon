@@ -65,22 +65,16 @@ Packet PreparePacketForLifting(const Packet &src) {
   return copy;
 }
 
-absl::Status FillBnInstructionLowLevelIL(Architecture *arch,
-                                         const PacketDb::InsnInfo &input,
-                                         size_t &len, LowLevelILFunction &il) {
-  if (input.insn_addr & 3) {
+absl::Status FillBnInstructionLowLevelIL(Architecture *arch, uint64_t pc,
+                                         const Packet &src,
+                                         LowLevelILFunction &il) {
+  if (pc & 3) {
     return absl::InvalidArgumentError(
-        StrCat("Got unaligned insn address ", Hex(input.insn_addr)));
-  }
-
-  // Populate IL info only at the beginning of a packet.
-  if (input.insn_num != 0) {
-    return absl::OkStatus();
+        StrCat("Got unaligned packet address ", Hex(pc)));
   }
 
   // Re-order instructions for easier processing.
-  Packet pkt = PreparePacketForLifting(input.pkt);
-  len = pkt.encod_pkt_size_in_bytes;
+  Packet pkt = PreparePacketForLifting(src);
 
   // There are many types of branches:
   //   {conditional, non-conditional} x {direct, indirect} x {call, jump}
@@ -182,7 +176,7 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch,
   for (int i = 0; i < pkt.num_insns; i++) {
     const Insn &insn = pkt.insn[i];
     RETURN_IF_ERROR(
-        FillBnInstructionLowLevelImpl(arch, input.pc, pkt, insn, i, *ctx));
+        FillBnInstructionLowLevelImpl(arch, pc, pkt, insn, i, *ctx));
   }
 
   // Write back all clobbered registers, and clear context.
@@ -220,11 +214,11 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch,
           il.AddInstruction(il.Goto(done));
         } else if (IsJump(insn)) {
           il.AddInstruction(
-              il.Jump(il.ConstPointer(4, input.pc + insn.immed[0])));
+              il.Jump(il.ConstPointer(4, pc + insn.immed[0])));
         } else {
           CHECK(IsCall(insn));
           il.AddInstruction(
-              il.Call(il.ConstPointer(4, input.pc + insn.immed[0])));
+              il.Call(il.ConstPointer(4, pc + insn.immed[0])));
           // Skip other branches in the packet, and go to the next neighboring
           // packet.
           il.AddInstruction(il.Goto(done));

@@ -105,10 +105,12 @@ void tokenize_A2_add(uint64_t pc, const Packet &pkt, const Insn &insn,
     [GenInstructionInfo](https://api.binary.ninja/binaryninja.architecture-module.html?highlight=text#binaryninja.architecture.Architecture.get_instruction_info)
     API: it analyzes decoder's information, and reports packet's branch targets.
 
-*   **Packet Database**: maps binary addresses to instruction packets.
-    BinaryNinja works at a single instruction level, however, in order to
-    properly model an instruction, knowledge on its neighboring packet
-    instructions is needed.
+*   **Packets as instructions**: each packet is one Binary Ninja instruction.
+    Its text has one line per instruction word; every line ends with a
+    `NewLineToken` whose value is the word's offset in the packet, so each line
+    shows the address of its own word. Modelling an instruction needs the rest
+    of its packet, and decoding the whole packet from the bytes Binary Ninja
+    passes in keeps no state between views.
 
 *   **Instruction IL Generator**: [gen_il_funcs.py](/plugin/gen_il_funcs.py)
     parses instruction definitions, and generated code that implements BN's
@@ -189,8 +191,8 @@ void lift_A2_pxort(Architecture *arch, uint64_t pc, const Packet &pkt,
 *   **Plugin**: program's entry point, it implements and registers the new
     'Hexagon'
     [architecture module](https://api.binary.ninja/binaryninja.architecture-module.html).
-    Architecture module stores decoded instructions in `packet_db`, calls out to
-    `insn_util` to disassemble instructions, and `il_util` to lift packets.
+    Architecture module decodes the packet at each address, calls out to
+    `insn_util` to disassemble it, and `il_util` to lift it.
 
 ## References
 

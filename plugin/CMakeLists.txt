@@ -72,14 +72,12 @@ add_library(plugin_lib
   il_util.cc
   insn_util.cc
   packet_context.cc
-  packet_db.cc
   text_util.cc
 )
 
 
 target_link_libraries(plugin_lib
   binaryninjaapi
-  interval_map
   decoder_c_lib
   absl::base
   absl::strings
@@ -112,7 +110,6 @@ function (add_plugin_test name)
 endfunction()
 
 add_plugin_test(decoder_test)
-add_plugin_test(packet_db_test)
 add_plugin_test(il_util_test)
 add_plugin_test(insn_util_test)
 

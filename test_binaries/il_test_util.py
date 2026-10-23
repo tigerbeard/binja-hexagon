@@ -41,6 +41,25 @@ def normalize_il(text):
   return '\n'.join(lines[:1] + [l for l in lines[1:] if l.strip()])
 
 
+def instruction_lines(binja, tokens):
+  """Splits one instruction's tokens into lines at its NewLineTokens.
+
+  A packet is one instruction whose text has one line per instruction word.
+  Building lines from the tokens, rather than from Binary Ninja's rendered
+  disassembly, leaves out the annotations Binary Ninja adds to lines.
+  """
+  lines, line = [], ''
+  for tok in tokens:
+    if tok.type == binja.InstructionTextTokenType.NewLineToken:
+      lines.append(line.strip())
+      line = ''
+    else:
+      line += str(tok)
+  if line.strip():
+    lines.append(line.strip())
+  return lines
+
+
 def check_environment(binja):
   """Prints the BN build and checks that BN loaded this build's plugin."""
   print('Binary Ninja {}'.format(binja.core_version()), file=sys.stderr)

@@ -110,7 +110,6 @@ SET(HEADLESS ON)
 add_subdirectory(third_party/glog EXCLUDE_FROM_ALL)
 add_subdirectory(third_party/googletest EXCLUDE_FROM_ALL)
 add_subdirectory(third_party/abseil-cpp EXCLUDE_FROM_ALL)
-add_subdirectory(third_party/chromium)
 add_subdirectory(third_party/binaryninja-api EXCLUDE_FROM_ALL)
 
 #

@@ -21,6 +21,9 @@
 
 namespace {
 
+using absl::IsOk;
+using testing::Not;
+
 TEST(DecoderTest, DecodesSingleAluInstruction) {
   // 00 e0 00 78 7800e000 {  r0 = #256 }
   // alu.idef:
@@ -165,6 +168,40 @@ TEST(DecoderTest, FailsSafeOnInvalidAsciiStringRegression2) {
   std::vector<uint32_t> words = {0x492D6275, 0x64253A44};
   EXPECT_THAT(Decoder::Get().DecodePacket(words),
               absl::StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(DecoderTest, FailsOnLongRunOfNonFinalWords) {
+  // R0 = add(R1,R2) with parse bits 01 ("not last"), nine times, then the same
+  // instruction ending the packet. Decoding must stop before overrunning
+  // Packet::insn (#15).
+  std::vector<uint32_t> words(9, 0xf3014200);
+  words.push_back(0xf301c200);
+  EXPECT_THAT(Decoder::Get().DecodePacket(words), Not(IsOk()));
+}
+
+TEST(DecoderTest, DecodePacketAtReadsAtMostFourWords) {
+  // The same run, through the byte interface Binary Ninja uses.
+  std::vector<uint32_t> words(9, 0xf3014200);
+  words.push_back(0xf301c200);
+  const auto *bytes = reinterpret_cast<const uint8_t *>(words.data());
+  EXPECT_THAT(Decoder::Get().DecodePacketAt(bytes, words.size() * 4),
+              Not(IsOk()));
+  // Four words, the last ending the packet, decode.
+  std::vector<uint32_t> four = {0xf3014200, 0xf3014200, 0xf3014200,
+                                0xf301c200};
+  ASSERT_OK_AND_ASSIGN(
+      Packet pkt,
+      Decoder::Get().DecodePacketAt(
+          reinterpret_cast<const uint8_t *>(four.data()), four.size() * 4));
+  EXPECT_EQ(pkt.encod_pkt_size_in_bytes, 16);
+}
+
+TEST(DecoderTest, DecodePacketAtIgnoresTrailingPartialWord) {
+  const uint8_t bytes[] = {0x00, 0xe0, 0x00, 0x78, 0xff, 0xff};
+  ASSERT_OK_AND_ASSIGN(Packet pkt,
+                       Decoder::Get().DecodePacketAt(bytes, sizeof(bytes)));
+  EXPECT_EQ(pkt.insn[0].opcode, A2_tfrsi);
+  EXPECT_THAT(Decoder::Get().DecodePacketAt(bytes, 3), Not(IsOk()));
 }
 
 } // namespace

@@ -119,8 +119,18 @@ def random_word(info, rng):
   return word
 
 
+# Values at the edges of saturation, rounding and sign, which random values
+# seldom reach.
+EDGES = [0, 1, 0xffffffff, 0x7fff, 0x8000, 0xffff, 0xffff8000, 0x7fffffff,
+         0x80000000, 0x80008000, 0x7fff7fff, 0x00010001]
+
+
+def random_value(rng):
+  return rng.choice(EDGES) if rng.random() < 0.25 else rng.getrandbits(32)
+
+
 def random_regs(rng):
-  regs = {'r%d' % i: rng.getrandbits(32) for i in range(32)}
+  regs = {'r%d' % i: random_value(rng) for i in range(32)}
   regs.update({'p%d' % i: rng.choice((0, 0xff)) for i in range(4)})
   regs.update(m0=rng.getrandbits(32), m1=rng.getrandbits(32))
   return regs

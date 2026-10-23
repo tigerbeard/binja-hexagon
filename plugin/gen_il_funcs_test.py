@@ -846,7 +846,7 @@ class TestGenIlFunc(unittest.TestCase):
         self.parse_semantics('C2_all8'), [
             '{ LowLevelILLabel true_case, false_case, done;',
             IlIf(
-                IlCompareEqual(1, IlRegister(1, 'PsV'), IlConst(4, '0xff')),
+                IlCompareEqual(1, IlRegister(1, 'PsV'), IlConst(1, '0xff')),
                 'true_case', 'false_case'), 'true_case',
             IlSetRegister(1, 'PdV', IlConst(4, '0xff')),
             IlGoto('done'), 'false_case',
@@ -1093,34 +1093,18 @@ class TestGenIlFunc(unittest.TestCase):
         ])
 
   def test_zxth(self):
+    # A literal 16-bit width lifts as an extension of the low half.
     self.assertEqual(
         self.parse_semantics('A2_zxth'), [
-            IlSetRegister(
-                4, 'RdV',
-                IlAnd(
-                    4, IlRegister(4, 'RsV'),
-                    IlSub(4, IlShiftLeft(4, IlConst(4, 1), IlConst(4, 16)),
-                          IlConst(4, 1))))
+            IlSetRegister(4, 'RdV',
+                          IlZeroExtend(4, IlLowPart(2, IlRegister(4, 'RsV'))))
         ])
 
   def test_sxth(self):
     self.assertEqual(
         self.parse_semantics('A2_sxth'), [
-            IlSetRegister(
-                4, 'RdV',
-                IlSub(
-                    4,
-                    IlXor(
-                        4,
-                        IlAnd(
-                            4, IlRegister(4, 'RsV'),
-                            IlSub(4,
-                                  IlShiftLeft(4, IlConst(4, 1), IlConst(4, 16)),
-                                  IlConst(4, 1))),
-                        IlShiftLeft(4, IlConst(4, 1),
-                                    IlSub(4, IlConst(4, 16), IlConst(4, 1)))),
-                    IlShiftLeft(4, IlConst(4, 1),
-                                IlSub(4, IlConst(4, 16), IlConst(4, 1)))))
+            IlSetRegister(4, 'RdV',
+                          IlSignExtend(4, IlLowPart(2, IlRegister(4, 'RsV'))))
         ])
 
   def test_loadrigp(self):
@@ -1353,12 +1337,13 @@ class TestGenIlFunc(unittest.TestCase):
                  'done'), 'true_case', '{ LowLevelILLabel true_case, done;',
             IlIf(
                 IlCompareEqual(1, IlRegister(1, 'HEX_REG_USR_LPCFG'),
-                               IlConst(4, 1)), 'true_case',
+                               IlConst(1, 1)), 'true_case',
                 'done'), 'true_case',
             IlSetRegister(1, 'Pd3', IlConst(4, '0xff')), 'done', '}',
             IlSetRegister(
                 1, 'HEX_REG_USR_LPCFG',
-                IlSub(1, IlRegister(1, 'HEX_REG_USR_LPCFG'), IlConst(4, 1))),
+                IlSub(4, IlSignExtend(4, IlRegister(1, 'HEX_REG_USR_LPCFG')),
+                      IlConst(4, 1))),
             'done', '}', '{ LowLevelILLabel true_case, done;',
             IlIf(
                 IlCompareSignedGreaterThan(4, IlRegister(4, 'HEX_REG_LC0'),
@@ -1446,11 +1431,11 @@ class TestGenIlFunc(unittest.TestCase):
                                 IlConst(4, 1))),
                         IlShiftLeft(
                             4, IlConst(4, 1),
-                            IlSub(8, IlRegister(8, 'WIDTH_REG'), IlConst(4,
+                            IlSub(8, IlRegister(8, 'WIDTH_REG'), IlConst(8,
                                                                          1)))),
                     IlShiftLeft(
                         4, IlConst(4, 1),
-                        IlSub(8, IlRegister(8, 'WIDTH_REG'), IlConst(4, 1)))))
+                        IlSub(8, IlRegister(8, 'WIDTH_REG'), IlConst(8, 1)))))
         ])
 
   def test_swiz(self):

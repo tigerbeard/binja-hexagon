@@ -137,5 +137,36 @@ f:
 
 
 
+class TestDisassemblyText(SnippetTest):
+
+  def test_manual_syntax(self):
+    # #13: signed immediates printed as unsigned hex, pairs as R1:R0, and
+    # C14-C19, C30, C31 without their names.
+    f = self.analyse('''
+f:
+  { r0 = add(r1, #-16) }
+  { r3:2 = combine(r0, r1) }
+  { r5:4 = add(r3:2, r9:8) }
+  { r0 = c14 }
+  { r1 = c17 }
+  { r2 = c18 }
+  { r3 = c31 }
+  { r0 = ##0x80000000 }
+  { jumpr r31 }
+''')['f']
+    self.assertEqual(
+        hexasm.disasm(binja, f), '''
+{ R0 = add(R1,#-0x10) }
+{ R3:2 = combine(R0,R1) }
+{ R5:4 = add(R3:2,R9:8) }
+{ R0 = UPCYCLELO }
+{ R1 = FRAMEKEY }
+{ R2 = PKTCOUNTLO }
+{ R3 = UTIMERHI }
+{ immext(#0x80000000)
+R0 = ##0x80000000 }
+{ jumpr LR }''')
+
+
 if __name__ == '__main__':
   unittest.main()

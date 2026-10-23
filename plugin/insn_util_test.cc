@@ -304,7 +304,7 @@ TEST_F(InsnUtilTest, DisasmsIfInsn) {
   EXPECT_THAT(Disasm(kCondJumpPacket), Eq("{ immext(#0x100)\n"
                                           "  if (P0.new) jump:t 0x194\n"
                                           "  jump 0x1a4\n"
-                                          "  P0 = cmp.eq(R3,#0xffffffdd) }"));
+                                          "  P0 = cmp.eq(R3,#-0x23) }"));
 }
 
 TEST_F(InsnUtilTest, DisasmsSubInsn) {
@@ -320,13 +320,13 @@ TEST_F(InsnUtilTest, DisasmsCombineTwoImmexts) {
   EXPECT_THAT(Disasm(0x60ec), Eq("{ immext(#0x8e00)\n"
                                  "  R16 = add(PC,##0x8e1c)\n"
                                  "  immext(#0xffc0)\n"
-                                 "  R3:R2 = combine(#0x4,##0xffff) }"));
+                                 "  R3:2 = combine(#0x4,##0xffff) }"));
 }
 
 TEST_F(InsnUtilTest, DisasmsMemd) {
   EXPECT_THAT(Disasm(0x7160),
               Eq("{ R16 = R0\n"
-                 "  memd(SP+#0xfffffff0) = R17:R16; allocframe(#0x10) }"));
+                 "  memd(SP+#-0x10) = R17:16; allocframe(#0x10) }"));
 }
 
 TEST_F(InsnUtilTest, DisasmsLoop) {

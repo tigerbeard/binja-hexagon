@@ -765,11 +765,12 @@ R1 = memw(0+##0x123450) }
         self.list_llil(func), '''
 0: temp0.d = 1
 1: R0 = temp0.d
-2: temp2.q = (temp2.q & not.q(0xffffffff << 0)) | (R0 & 0xffffffff) << 0
-3: temp2.q = (temp2.q & not.q(0xffffffff << 0x20)) | 0 << 0x20
-4: R3:R2 = temp2.q
-5: temp200.d = LR
-6: <return> jump(LR)''')
+2: temp202.q = 0
+3: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | (R0 & 0xffffffff) << 0
+4: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | 0 << 0x20
+5: R3:R2 = temp202.q
+6: temp305.d = LR
+7: <return> jump(LR)''')
 
   def test_combine_reg_and_zero(self):
     func = self.get_function('test_combine_reg_and_zero')
@@ -782,11 +783,12 @@ R1 = memw(0+##0x123450) }
         self.list_llil(func), '''
 0: temp0.d = 1
 1: R0 = temp0.d
-2: temp2.q = (temp2.q & not.q(0xffffffff << 0)) | 0 << 0
-3: temp2.q = (temp2.q & not.q(0xffffffff << 0x20)) | (R0 & 0xffffffff) << 0x20
-4: R3:R2 = temp2.q
-5: temp200.d = LR
-6: <return> jump(LR)''')
+2: temp202.q = 0
+3: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | 0 << 0
+4: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | (R0 & 0xffffffff) << 0x20
+5: R3:R2 = temp202.q
+6: temp305.d = LR
+7: <return> jump(LR)''')
 
   def test_combine_imms(self):
     func = self.get_function('test_combine_imms')
@@ -797,11 +799,12 @@ R3:2 = combine(#0x1,##0x30400) }
 { jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp2.q = (temp2.q & not.q(0xffffffff << 0)) | (0x30400 & 0xffffffff) << 0
-1: temp2.q = (temp2.q & not.q(0xffffffff << 0x20)) | (1 & 0xffffffff) << 0x20
-2: R3:R2 = temp2.q
-3: temp200.d = LR
-4: <return> jump(LR)''')
+0: temp202.q = 0
+1: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | (0x30400 & 0xffffffff) << 0
+2: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | (1 & 0xffffffff) << 0x20
+3: R3:R2 = temp202.q
+4: temp305.d = LR
+5: <return> jump(LR)''')
 
   def test_combine_regs(self):
     func = self.get_function('test_combine_regs')
@@ -816,11 +819,12 @@ R3:2 = combine(#0x1,##0x30400) }
 1: temp1.d = 2
 2: R0 = temp0.d
 3: R1 = temp1.d
-4: temp2.q = (temp2.q & not.q(0xffffffff << 0)) | (R1 & 0xffffffff) << 0
-5: temp2.q = (temp2.q & not.q(0xffffffff << 0x20)) | (R0 & 0xffffffff) << 0x20
-6: R3:R2 = temp2.q
-7: temp200.d = LR
-8: <return> jump(LR)''')
+4: temp202.q = 0
+5: temp202.q = (temp202.q & not.q(0xffffffff << 0)) | (R1 & 0xffffffff) << 0
+6: temp202.q = (temp202.q & not.q(0xffffffff << 0x20)) | (R0 & 0xffffffff) << 0x20
+7: R3:R2 = temp202.q
+8: temp305.d = LR
+9: <return> jump(LR)''')
 
   def test_rol(self):
     func = self.get_function('test_rol')
@@ -858,18 +862,19 @@ memd(SP+#-0x10) = R17:16; allocframe(#0x18) }
 { jumpr LR }''')
     self.assertEqual(
         self.list_llil(func), '''
-0: temp16.q = (temp16.q & not.q(0xffffffff << 0)) | (R1 & 0xffffffff) << 0
-1: temp16.q = (temp16.q & not.q(0xffffffff << 0x20)) | (R0 & 0xffffffff) << 0x20
-2: temp116.q = R17:R16
-3: temp100.d = SP - 0x10
-4: [temp100.d {var_10}].q = temp116.q
-5: temp100.d = SP - 8
-6: [temp100.d {var_8}].q = LR:FP
-7: FP = temp100.d
-8: SP = temp100.d - 0x18
-9: R17:R16 = temp16.q
-10: temp200.d = LR
-11: <return> jump(LR)''')
+0: temp216.q = 0
+1: temp216.q = (temp216.q & not.q(0xffffffff << 0)) | (R1 & 0xffffffff) << 0
+2: temp216.q = (temp216.q & not.q(0xffffffff << 0x20)) | (R0 & 0xffffffff) << 0x20
+3: temp116.q = R17:R16
+4: temp300.d = SP - 0x10
+5: [temp300.d {var_10}].q = temp116.q
+6: temp300.d = SP - 8
+7: [temp300.d {var_8}].q = LR:FP
+8: FP = temp300.d
+9: SP = temp300.d - 0x18
+10: R17:R16 = temp216.q
+11: temp305.d = LR
+12: <return> jump(LR)''')
 
   def test_lsbnew(self):
     func = self.get_function('test_lsbnew')

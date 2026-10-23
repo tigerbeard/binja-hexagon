@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include "absl/memory/memory.h"
@@ -147,5 +147,6 @@ private:
   int AddDestReg(bool rw, int size, int reg);
 
   BinaryNinja::LowLevelILFunction &il_;
-  std::unordered_map<int, std::unique_ptr<TempReg>> regs_;
+  // Ordered by register, so write-back order is the same on every platform.
+  std::map<int, std::unique_ptr<TempReg>> regs_;
 };

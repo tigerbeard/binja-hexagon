@@ -1,78 +1,86 @@
 ## Setup
 
+The plugin builds against the Binary Ninja C++ API in
+`third_party/binaryninja-api`. That submodule must match the Binary Ninja you
+load the plugin into: Binary Ninja refuses plugins built for another core ABI
+version. The pinned commit is the one named in your installation's
+`api_REVISION.txt` (on macOS,
+`/Applications/Binary Ninja.app/Contents/Resources/api_REVISION.txt`). It is
+currently Binary Ninja 6.1.
+
 ### Third party dependencies
 
-Install Python's build dependencies using `pip3`:
+Download the plugin's third party repositories. Binary Ninja's API needs only
+its `vendor/fmt` submodule; its other submodules are large and unused here:
 
 ```
-$ pip3 install -r requirements.txt
+$ git submodule update --init third_party/abseil-cpp third_party/gflags \
+    third_party/glog third_party/googletest third_party/binaryninja-api
+$ git -C third_party/binaryninja-api submodule update --init vendor/fmt
 ```
 
-It is recommended to do so in a separate `venv` environment. One time
-initialization:
+The code generators, their tests and the headless tests run on one Python
+interpreter (3.12 or newer). Create a `venv` with the build dependencies:
 
 ```
-$ python3 -m venv venv
-```
-
-Then activate the environment by sourcing its `bin/activate` file:
-
-```
-$ source venv/bin/activate
-```
-
-Install Binary Ninja Python API:
-
-```
-$ python3 ${HOME}/binaryninja/scripts/install_api.py
-```
-
----
-
-Download plugin's third party repositories:
-
-```
-$ git submodule update --init
+$ python3 -m venv .venv
+$ .venv/bin/pip install -r requirements.txt
 ```
 
 ### Build
 
-Build the plugin using `cmake`:
-
 ```
-$ mkdir build
-$ cd build
-$ cmake ..
-$ make -j
+$ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+    -DPython3_EXECUTABLE=$PWD/.venv/bin/python
+$ cmake --build build
 ```
 
-The build process accepts the following variables, set using `cmake -D` command
-line argument:
+The build accepts the following variables, set using `cmake -D`:
 
-- **BN_INSTALL_DIR**: Binary Ninja installation directory. This parameter is
-  required in order to find BN's core library. If not specified, cmakes tries
-  to find BN at its default install location.
+- **BN_INSTALL_DIR**: Binary Ninja installation directory. Defaults to
+  `/Applications/Binary Ninja.app` on macOS and `~/binaryninja` elsewhere.
+  Used to find the Python API for the tests and the core library at run time.
+
+- **CMAKE_POLICY_VERSION_MINIMUM**: needed with CMake 4, because the pinned
+  gflags, glog and googletest declare CMake versions older than 3.5.
+
+- **Python3_EXECUTABLE**: the interpreter from the `venv` above.
 
 - **USE_DOCKER_BUILD**: Tells build system to cross-compile Hexagon targets in
   a custom Docker image. Image is downloaded from QEMU's registry.
 
-To build using `clang` override CC environment variable and include
-`clang_overrides.cmake` as follows:
+On macOS, if linking fails with `unknown architecture` in `libSystem.tbd`, the
+Command Line Tools linker is older than the default SDK. Point the build at an
+older SDK, e.g.
+`-DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`.
+
+To build using `clang` on Linux, override CC and include `clang_overrides.cmake`:
 
 ```
-$ CC="$(which clang)" CXX="$(which clang++)" cmake .. \
-  -DCMAKE_USER_MAKE_RULES_OVERRIDE="${PWD}/../cmake/clang_overrides.cmake"
+$ CC="$(which clang)" CXX="$(which clang++)" cmake -S . -B build \
+  -DCMAKE_USER_MAKE_RULES_OVERRIDE="${PWD}/cmake/clang_overrides.cmake"
 ```
-
----
-
-`make check` runs all unit tests. Note, a BN professional license is required in
-order to run the headless e2e tests.
 
 ### Binary Ninja plugin
 
-Add a symlink to the plugin binary:
+Link the plugin library into the user plugins directory:
 
 ```
-$ ln -s ${PWD}/plugin/libarch_hexagon.so ${HOME}/.binaryninja/plugins/libarch_hexagon.so
+# macOS
+$ ln -s "$PWD/build/plugin/libarch_hexagon.dylib" \
+    ~/Library/Application\ Support/Binary\ Ninja/plugins/
+# Linux
+$ ln -s "$PWD/build/plugin/libarch_hexagon.so" ~/.binaryninja/plugins/
 ```
+
+### Tests
+
+```
+$ ctest --test-dir build --output-on-failure
+```
+
+This runs the C++ unit tests, the code generator tests and the headless
+end-to-end tests. The end-to-end tests load the plugin from the user plugins
+directory and check that it is this build's library. Headless use needs a
+Binary Ninja license that allows it (Commercial or above).

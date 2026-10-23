@@ -18,6 +18,7 @@
 
 import unittest
 import os
+import sys
 
 try:
   import binaryninja as binja
@@ -25,6 +26,8 @@ except ImportError:
   print('Failed to import binaryninja Python API.')
   print('Add ${BN_INSTALL_DIR}/python to PYTHONPATH.')
   sys.exit(1)
+
+from il_test_util import check_environment, normalize_il
 
 
 # E2E test for Hexagon hlil plugin.
@@ -36,11 +39,19 @@ class TestPluginIl(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     assert (cls.TARGET_FILE is not None)
+    check_environment(binja)
     binja.log.log_to_stdout(True)
     cls.bv = binja.load(cls.TARGET_FILE)
 
   def get_function(self, name):
     return TestPluginIl.bv.get_functions_by_name(name)[0]
+
+  def assertEqual(self, first, second, msg=None):
+    # Listings compare after temp renaming and blank-line removal; see
+    # il_test_util.normalize_il.
+    if isinstance(first, str) and isinstance(second, str):
+      first, second = normalize_il(first), normalize_il(second)
+    super().assertEqual(first, second, msg)
 
   def list_hlil(self, func):
     ret = ['']
@@ -52,15 +63,13 @@ class TestPluginIl(unittest.TestCase):
     func = self.get_function('test_add_int')
     self.assertEqual(
         self.list_hlil(func), '''
-uint32_t temp0 = arg2 + arg1
-g_res = temp0
-return temp0''')
+g_res = b + a''')
 
   def test_cmp_signed_int(self):
     func = self.get_function('test_cmp_signed_int')
     self.assertEqual(
         self.list_hlil(func), '''
-bool temp90 = arg2 s> arg1
+bool temp90 = b s> a
 uint32_t temp1
 if (temp90)
     temp1 = 0x8765
@@ -72,7 +81,7 @@ g_res = temp1''')
     func = self.get_function('test_cmp_unsigned_int')
     self.assertEqual(
         self.list_hlil(func), '''
-bool temp90 = arg2 u> arg1
+bool temp90 = b u> a
 uint32_t temp1
 if (temp90)
     temp1 = 0x8765
@@ -84,122 +93,100 @@ g_res = temp1''')
     func = self.get_function('test_mul_int')
     self.assertEqual(
         self.list_hlil(func), '''
-uint32_t temp0 = arg2 * arg1
-g_res = temp0
-return temp0''')
+g_res = b * a''')
 
   def test_func_call(self):
     func = self.get_function('test_func_call')
     self.assertEqual(
         self.list_hlil(func), '''
-uint32_t R0 = arg1(arg2)
-g_res = R0
-return R0''')
+g_res = a(b)''')
 
   def test_struct(self):
     func = self.get_function('test_struct')
     self.assertEqual(
         self.list_hlil(func), '''
-uint32_t temp0 = *(arg1 + 8) + arg2
-g_res = temp0
-return temp0''')
+g_res = *(a + 8) + b''')
 
   def test_fact(self):
     func = self.get_function('test_fact')
     self.assertEqual(
         self.list_hlil(func), '''
 char temp210 = 0
-if (arg1 != 0)
+if (a != 0)
     temp210 = 1
-int32_t var_c
-if (temp210 != 1)
-    var_c = 1
+int32_t result
+if (temp210 == 1)
+    result = test_fact(a - 1) * a
 else
-    var_c = test_fact(arg1 - 1) * arg1
-return var_c''')
+    result = 1
+return result''')
 
   def test_and_int(self):
     func = self.get_function('test_and_int')
     self.assertEqual(
         self.list_hlil(func), '''
-uint32_t temp0 = arg2 & arg1
-g_res = temp0
-return temp0''')
+g_res = b & a''')
 
   def test_or_int(self):
     func = self.get_function('test_or_int')
     self.assertEqual(
         self.list_hlil(func), '''
-uint32_t temp0 = arg2 | arg1
-g_res = temp0
-return temp0''')
+g_res = b | a''')
 
   def test_xor_int(self):
     func = self.get_function('test_xor_int')
     self.assertEqual(
         self.list_hlil(func), '''
-uint32_t temp0 = arg2 ^ arg1
-g_res = temp0
-return temp0''')
+g_res = b ^ a''')
 
   def test_not_int(self):
     func = self.get_function('test_not_int')
     self.assertEqual(
         self.list_hlil(func), '''
-g_res = 0xffffffff - arg1
-return 0xffffffff - arg1''')
+g_res = 0xffffffff - a''')
 
   def test_collatz(self):
     func = self.get_function('test_collatz')
     self.assertEqual(
         self.list_hlil(func), '''
-int32_t var_c = arg1
+int a_1 = a
 while (true)
     char temp210_1 = 0
-    if (var_c == 1)
+    if (a_1 == 1)
         temp210_1 = 1
     if (temp210_1 == 1)
         break
     char temp210_2 = 0
-    if ((var_c & 1) != 0)
+    if ((a_1 & 1) != 0)
         temp210_2 = 1
     if (temp210_2 == 1)
-        var_c = 1 + var_c * 3
+        a_1 = 1 + a_1 * 3
     else
-        var_c = var_c s>> 1
-return var_c''')
+        a_1 s>>= 1''')
 
   def test_max_signed_int(self):
     func = self.get_function('test_max_signed_int')
     self.assertEqual(
         self.list_hlil(func), '''
-int32_t temp0 = (arg1 s>= arg2 ? 1 : 0) * arg1 + (arg1 s< arg2 ? 1 : 0) * arg2
-g_res = temp0
-return temp0''')
+g_res = (a s>= b ? 1 : 0) * a + (a s< b ? 1 : 0) * b''')
 
   def test_max_unsigned_int(self):
     func = self.get_function('test_max_unsigned_int')
     self.assertEqual(
         self.list_hlil(func), '''
-int32_t temp0 = (arg1 u>= arg2 ? 1 : 0) * arg1 + (arg1 u< arg2 ? 1 : 0) * arg2
-g_res = temp0
-return temp0''')
+g_res = (a u>= b ? 1 : 0) * a + (a u< b ? 1 : 0) * b''')
 
   def test_min_signed_int(self):
     func = self.get_function('test_min_signed_int')
     self.assertEqual(
         self.list_hlil(func), '''
-int32_t temp0 = (arg1 s<= arg2 ? 1 : 0) * arg1 + (arg1 s> arg2 ? 1 : 0) * arg2
-g_res = temp0
-return temp0''')
+g_res = (a s<= b ? 1 : 0) * a + (a s> b ? 1 : 0) * b''')
 
   def test_min_unsigned_int(self):
     func = self.get_function('test_min_unsigned_int')
     self.assertEqual(
         self.list_hlil(func), '''
-int32_t temp0 = (arg1 u<= arg2 ? 1 : 0) * arg1 + (arg1 u> arg2 ? 1 : 0) * arg2
-g_res = temp0
-return temp0''')
+g_res = (a u<= b ? 1 : 0) * a + (a u> b ? 1 : 0) * b''')
 
 
 if __name__ == '__main__':

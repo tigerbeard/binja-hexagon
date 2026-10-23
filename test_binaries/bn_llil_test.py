@@ -18,6 +18,7 @@
 
 import unittest
 import os
+import sys
 
 try:
   import binaryninja as binja
@@ -25,6 +26,8 @@ except ImportError:
   print('Failed to import binaryninja Python API.')
   print('Add ${BN_INSTALL_DIR}/python to PYTHONPATH.')
   sys.exit(1)
+
+from il_test_util import check_environment, normalize_il
 
 
 # E2E test for Hexagon llil plugin.
@@ -36,12 +39,20 @@ class TestPluginIl(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     assert (cls.TARGET_FILE is not None)
+    check_environment(binja)
     binja.log.log_to_stdout(True)
     cls.bv = binja.load(cls.TARGET_FILE)
     cls.maxDiff = None
 
   def get_function(self, name):
     return TestPluginIl.bv.get_functions_by_name(name)[0]
+
+  def assertEqual(self, first, second, msg=None):
+    # Listings compare after temp renaming and blank-line removal; see
+    # il_test_util.normalize_il.
+    if isinstance(first, str) and isinstance(second, str):
+      first, second = normalize_il(first), normalize_il(second)
+    super().assertEqual(first, second, msg)
 
   def list_asm(self, func):
     ret = ['']
@@ -619,8 +630,8 @@ if (P0) callr R0 }
 10: SP = temp100.d + 8
 11: temp211.b = 1
 12: goto 13
-13: P0 = temp90.b
-14: R1 = temp1.d
+13: R1 = temp1.d
+14: P0 = temp90.b
 15: if (temp211.b == 1) then 16 else 17 @ 0x20280
 16: <return> jump(LR)
 17: temp0.d = 0
@@ -656,8 +667,8 @@ R1.L = #0x22 }
 1: temp0.d = (temp0.d & not.d(0xffff << 0x10)) | (0xc & 0xffff) << 0x10
 2: temp1.d = R1
 3: temp1.d = (temp1.d & not.d(0xffff << 0)) | (0x22 & 0xffff) << 0
-4: R1 = temp1.d
-5: R0 = temp0.d
+4: R0 = temp0.d
+5: R1 = temp1.d
 6: temp200.d = LR
 7: <return> jump(LR)''')
 
@@ -808,8 +819,8 @@ R3:R2 = combine(#0x1,##0x30400) }
         self.list_llil(func), '''
 0: temp0.d = 1
 1: temp1.d = 2
-2: R1 = temp1.d
-3: R0 = temp0.d
+2: R0 = temp0.d
+3: R1 = temp1.d
 4: temp2.q = (temp2.q & not.q(0xffffffff << 0)) | (R1 & 0xffffffff) << 0
 5: temp2.q = (temp2.q & not.q(0xffffffff << 0x20)) | (R0 & 0xffffffff) << 0x20
 6: R3:R2 = temp2.q

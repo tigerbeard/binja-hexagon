@@ -73,10 +73,23 @@ set_tests_properties(gen_il_funcs_test PROPERTIES
   ENVIRONMENT PYTHONPATH=${CMAKE_SOURCE_DIR}/third_party/qemu-hexagon
 )
 
+# The packet decoder, which does not need Binary Ninja.
+add_library(decoder_lib
+  decoder.cc
+)
+
+target_link_libraries(decoder_lib
+  decoder_c_lib
+  absl::base
+  absl::strings
+  absl::str_format
+  absl::statusor
+)
+
+# Instruction info, text and IL, built on the Binary Ninja API.
 add_library(plugin_lib
   ${INSN_TEXT_FUNCS_CC}
   ${IL_FUNCS_CC}
-  decoder.cc
   hw_loops.cc
   il_util.cc
   insn_util.cc
@@ -84,15 +97,13 @@ add_library(plugin_lib
   text_util.cc
 )
 
-
 target_link_libraries(plugin_lib
   binaryninjaapi
-  decoder_c_lib
+  decoder_lib
   absl::base
   absl::strings
   absl::str_format
   absl::statusor
-  absl::synchronization
 )
 
 target_include_directories(plugin_lib
@@ -100,13 +111,14 @@ target_include_directories(plugin_lib
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-function (add_plugin_test name)
+# A gtest of library |lib|.
+function (add_plugin_test name lib)
   add_executable(${name}
     ${name}.cc
   )
 
   target_link_libraries(${name}
-    plugin_lib
+    ${lib}
     gmock
     gtest_main
     absl::base
@@ -117,9 +129,9 @@ function (add_plugin_test name)
   add_dependencies(check ${name})
 endfunction()
 
-add_plugin_test(decoder_test)
-add_plugin_test(il_util_test)
-add_plugin_test(insn_util_test)
+add_plugin_test(decoder_test decoder_lib)
+add_plugin_test(il_util_test plugin_lib)
+add_plugin_test(insn_util_test plugin_lib)
 
 add_library(arch_hexagon SHARED
   arch_hexagon.cc

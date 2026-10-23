@@ -41,6 +41,10 @@ The build accepts the following variables, set using `cmake -D`:
   `/Applications/Binary Ninja.app` on macOS and `~/binaryninja` elsewhere.
   Used to find the Python API for the tests and the core library at run time.
 
+- **BN_ALLOW_STUBS**: if no Binary Ninja installation is found, link against
+  stubs of the core library generated from the API headers. The plugin then
+  compiles but cannot be loaded; the tests labelled `bn` (below) cannot run.
+
 - **Python3_EXECUTABLE**: the interpreter from the `venv` above.
 
 - **USE_DOCKER_BUILD**: Tells build system to cross-compile Hexagon targets in
@@ -77,6 +81,14 @@ $ ctest --test-dir build --output-on-failure
 ```
 
 This runs the C++ unit tests, the code generator tests and the headless
-end-to-end tests. The end-to-end tests load the plugin from the user plugins
-directory and check that it is this build's library. Headless use needs a
-Binary Ninja license that allows it (Commercial or above).
+end-to-end and regression tests. The headless tests, labelled `bn`, load the
+plugin from the user plugins directory and check that it is this build's
+library. Headless use needs a Binary Ninja license that allows it (Commercial
+or above). The regression tests also need LLVM's `llvm-mc`.
+
+Without Binary Ninja, configure with `-DBN_ALLOW_STUBS=ON` and leave out the
+`bn` tests:
+
+```
+$ ctest --test-dir build --output-on-failure --label-exclude bn
+```

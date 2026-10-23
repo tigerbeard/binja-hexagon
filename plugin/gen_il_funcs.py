@@ -1414,6 +1414,110 @@ class SemanticsTreeTransformer(Transformer):
   def macro_stmt_fSETWORD(self, args):
     return self.set_lane(args, 32)
 
+  def circular_add(self, rx, offset, mu):
+    # helper.h: Rx = fcircadd(Rx, OFFSET, Mu, CS), with CS the CS register
+    # paired with Mu:
+    #   K = Mu[27:24]; length = Mu[16:0]; new = Rx + OFFSET;
+    #   if (K == 0 && length >= 4) { start = CS; end = CS + length; }
+    #   else { start = Rx & ~((1 << (K + 2)) - 1); end = start | length; }
+    #   if (new >= end) new -= length; else if (new < start) new += length;
+    assert (isinstance(rx, IlRegister))
+    k, length, new, start, end = [
+        IlRegister(4, 'CIRC_REG + {}'.format(i)) for i in range(5)
+    ]
+    for reg in (k, length, new, start, end):
+      reg.signed = False
+    cs = IlRegister(4, 'HEX_REG_CS0 + ({} - HEX_REG_M0)'.format(mu.reg))
+    offset = convert(offset, 4, True)
+    ret = [
+        IlSetRegister(4, k.reg,
+                      IlAnd(4, IlLogicalShiftRight(4, mu, IlConst(1, 24)),
+                            IlConst(4, 0xf))),
+        IlSetRegister(4, length.reg, IlAnd(4, copy.copy(mu),
+                                           IlConst(4, 0x1ffff))),
+        IlSetRegister(4, new.reg, IlAdd(4, rx, offset)),
+    ]
+    normal = IlAnd(1, IlCompareEqual(4, k, IlConst(4, 0)),
+                   IlCompareUnsignedGreaterEqual(4, length, IlConst(4, 4)))
+    ret += self.if_stmt([
+        normal,
+        [
+            IlSetRegister(4, start.reg, cs),
+            IlSetRegister(4, end.reg, IlAdd(4, cs, length)),
+        ],
+        [
+            IlSetRegister(
+                4, start.reg,
+                IlAnd(
+                    4, rx,
+                    IlNot(
+                        4,
+                        IlSub(
+                            4,
+                            IlShiftLeft(4, IlConst(4, 1),
+                                        IlAdd(4, k, IlConst(4, 2))),
+                            IlConst(4, 1))))),
+            IlSetRegister(4, end.reg, IlOr(4, start, length)),
+        ],
+    ])
+    ret += self.if_stmt([
+        IlCompareUnsignedGreaterEqual(4, new, end),
+        [IlSetRegister(4, new.reg, IlSub(4, new, length))],
+        self.if_stmt([
+            IlCompareUnsignedLessThan(4, new, start),
+            [IlSetRegister(4, new.reg, IlAdd(4, new, length))],
+        ]),
+    ])
+    ret += [IlSetRegister(4, rx.reg, new)]
+    return ret
+
+  def macro_stmt_fPM_CIRI(self, args):
+    # gen_tcg.h: fcircadd(REG, IMM, Mu, CS).
+    assert (len(args) == 3)
+    rx, offset, mu = list(map(self.lift_operand, args))
+    return self.circular_add(rx, offset, mu)
+
+  def macro_stmt_fPM_CIRR(self, args):
+    # gen_tcg.h: fcircadd(REG, VAL, Mu, CS), VAL from fREAD_IREG.
+    return self.macro_stmt_fPM_CIRI(args)
+
+  def macro_expr_fREAD_IREG(self, args):
+    # macros.h (gen_read_ireg): the signed 11-bit I field of a modifier
+    # register, Mu[31:28] above Mu[23:17].
+    assert (len(args) == 1)
+    mu = self.lift_operand(args[0])
+    high = IlShiftLeft(4, IlArithShiftRight(4, mu, IlConst(1, 28)),
+                       IlConst(1, 7))
+    low = IlAnd(4, IlLogicalShiftRight(4, copy.copy(mu), IlConst(1, 17)),
+                IlConst(4, 0x7f))
+    value = IlOr(4, high, low)
+    value.signed = True
+    return value
+
+  def macro_stmt_fEA_BREVR(self, args):
+    # helper.h: EA = fbrev(REG), REG with its low 16 bits reversed:
+    # deposit32(REG, 0, 16, revbit16(REG)). Swapping bits, pairs, nibbles and
+    # bytes reverses them.
+    assert (len(args) == 1)
+    reg = self.lift_operand(args[0])
+    ea = IlRegister(4, 'EA_REG')
+    ret = [IlSetRegister(4, 'EA_REG', IlAnd(4, reg, IlConst(4, 0xffff)))]
+    for shift, mask in ((1, 0x5555), (2, 0x3333), (4, 0x0f0f), (8, 0x00ff)):
+      ret.append(
+          IlSetRegister(
+              4, 'EA_REG',
+              IlOr(
+                  4,
+                  IlAnd(4, IlLogicalShiftRight(4, ea, IlConst(1, shift)),
+                        IlConst(4, mask)),
+                  IlShiftLeft(4, IlAnd(4, ea, IlConst(4, mask)),
+                              IlConst(1, shift)))))
+    ret.append(
+        IlSetRegister(
+            4, 'EA_REG',
+            IlOr(4, IlAnd(4, copy.copy(reg), IlConst(4, 0xffff0000)), ea)))
+    return ret
+
   def macro_expr_fGETBIT(self, args):
     # macros.h:
     # #define fGETBIT(N, SRC) (((SRC) >> N) & 1)
@@ -2203,6 +2307,13 @@ def genptr_decl(tag, regtype, regid, regno):
           RawC('''const int {0}{1}V = ctx.AddDestReadWriteReg({2});'''.format(
               regtype, regid, mapped_regno))
       ]
+
+  if (regtype == 'M' and regid == 'u'):
+    # Modifier register M0 or M1 (read-only).
+    return [
+        RawC('''const int {0}{1}V = {2};'''.format(regtype, regid,
+                                                   mapped_regno))
+    ]
 
   if (regtype == 'P'):
     if (regid in {'s', 't', 'u', 'v'}):

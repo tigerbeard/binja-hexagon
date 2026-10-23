@@ -53,6 +53,9 @@ int MapRegNum(char regtype, int regno) {
   if (regtype == 'P') {
     return HEX_REG_P0 + regno;
   }
+  if (regtype == 'M') {
+    return HEX_REG_M0 + regno;
+  }
   // The generated lifters only map these register types.
   LogError("Unknown regtype %d", static_cast<int>(regtype));
   assert(false);
@@ -216,6 +219,9 @@ size_t TempRegSize(uint32_t index) {
   if (index < kLocalTempBase) {
     return 1;
   }
-  // LOCAL1_REG, LOCAL2_REG, LOCAL4_REG and LOCAL8_REG.
-  return size_t{1} << ((index - kLocalTempBase) / kLocalTempsPerSize);
+  if (index < kCircTempBase) {
+    // LOCAL1_REG, LOCAL2_REG, LOCAL4_REG and LOCAL8_REG.
+    return size_t{1} << ((index - kLocalTempBase) / kLocalTempsPerSize);
+  }
+  return 4; // CIRC_REG.
 }

@@ -72,7 +72,12 @@ constexpr int kLocalTempsPerSize = 8;
 #define LOCAL4_REG LLIL_TEMP(kLocalTempBase + 2 * kLocalTempsPerSize)
 #define LOCAL8_REG LLIL_TEMP(kLocalTempBase + 3 * kLocalTempsPerSize)
 
-constexpr int kNumTemps = kLocalTempBase + 4 * kLocalTempsPerSize;
+// Scratch values of circular addressing (fcircadd): CIRC_REG + 0 to 4.
+constexpr int kCircTempBase = kLocalTempBase + 4 * kLocalTempsPerSize;
+#define CIRC_REG LLIL_TEMP(kCircTempBase)
+constexpr int kNumCircTemps = 5;
+
+constexpr int kNumTemps = kCircTempBase + kNumCircTemps;
 
 static_assert(HEX_REG_USR_LPCFG < NUM_HEX_REGS,
               "every HEX_REG must fit in one temp subspace");

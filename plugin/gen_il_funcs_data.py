@@ -397,5 +397,14 @@ SUPPORTED_TAGS = [
     'S6_vtrunohb_ppp', 'S2_vsxthw', 'S2_vzxthw', 'S2_vsatwh', 'S2_vsatwuh',
     'S2_packhl', 'S2_vsathub_nopack', 'S2_vsathb_nopack', 'S2_vsatwh_nopack',
     'S2_vsatwuh_nopack', 'S2_shuffob', 'S2_shuffeb', 'S2_shuffoh',
-    'S2_shuffeh'
+    'S2_shuffeh',
+    # Loads that spread bytes over halves (membh, memubh) or shift them in
+    # (memb_fifo, memh_fifo).
+    'L2_loadbzw2_io', 'L4_loadbzw2_ur', 'L4_loadbzw2_ap', 'L2_loadbzw2_pi',
+    'L2_loadbzw4_io', 'L4_loadbzw4_ur', 'L4_loadbzw4_ap', 'L2_loadbzw4_pi',
+    'L2_loadbsw2_io', 'L4_loadbsw2_ur', 'L4_loadbsw2_ap', 'L2_loadbsw2_pi',
+    'L2_loadbsw4_io', 'L4_loadbsw4_ur', 'L4_loadbsw4_ap', 'L2_loadbsw4_pi',
+    'L2_loadalignh_io', 'L4_loadalignh_ur', 'L4_loadalignh_ap',
+    'L2_loadalignh_pi', 'L2_loadalignb_io', 'L4_loadalignb_ur',
+    'L4_loadalignb_ap', 'L2_loadalignb_pi'
 ]

@@ -29,6 +29,11 @@ register is a small multiple of 8, and m0/m1 hold small increments. Absolute add
 (which need constant extenders) and locked accesses are left out, as are branches, system, HVX, new-value and duplex
 instructions.
 
+Instructions newer than QEMU's CPU (qemu_oracle.cpu()) are left out, and so
+are encodings that write one register twice, such as Rd = memw(Rx++#s4:2)
+with Rd and Rx the same: the architecture leaves them undefined, and QEMU
+versions differ on which write wins.
+
 Predicates: the plugin writes compare results as 1 where the hardware writes
 0xff, so a predicate matches when both are 0 or the plugin's is 1 and QEMU's
 0xff. Inputs are 0 or 0xff. USR (the saturation flag) is not compared.
@@ -42,6 +47,7 @@ import re
 import sys
 
 import hexasm
+import isa_versions
 import llil_eval
 import llvm_diff
 import qemu_oracle
@@ -95,18 +101,20 @@ def op_attribs(path=OP_ATTRIBS):
     }
 
 
-def testable(tag, attribs, iset):
+def testable(tag, attribs, iset, version=None):
+  """Whether qemu_diff can compare |tag| on a CPU of |version| (by default
+  QEMU's)."""
   info = iset.get(tag)
   if info is None or tag.startswith(('V6_', 'SA1_', 'SL1_', 'SL2_', 'SS1_',
                                      'SS2_')):
+    return False
+  if isa_versions.introduced(tag) > (version or qemu_oracle.version()):
     return False
   enc = info['enc'].replace(' ', '')
   syntax = info['syntax']
   if attribs.get(tag, set()) & MEMORY_ATTRIBS and (
       not _MEMORY_OPERAND.search(syntax) or tag.startswith('Y') or
-      re.search(r'locked|phys', syntax) or
-      # V79 :nt stores, which QEMU's newest CPU (V73) does not have.
-      ':nt' in syntax):
+      re.search(r'locked|phys', syntax)):
     return False
   return (len(enc) == 32 and 'PP' in info['enc'] and
           not attribs.get(tag, set()) & EXCLUDED_ATTRIBS and
@@ -157,6 +165,18 @@ def random_regs(rng):
   return regs
 
 
+def writes_a_register_twice(info, word):
+  """Whether |word| names one general or predicate register in two of its
+  destinations (a pair counts as both its registers)."""
+  written = collections.defaultdict(list)
+  # Each operand once: Rx32=and(#u8,asl(Rx32,#U5)) names Rx32 twice.
+  for regtype, regid in set(
+      re.findall(r'\b([RP])([de]{1,2}|[xy]{1,2})\d', info['syntax'])):
+    number = field(info, word, regid[0])
+    written[regtype].extend(range(number, number + len(regid)))
+  return any(len(set(numbers)) < len(numbers) for numbers in written.values())
+
+
 def field(info, word, letter):
   """The value of |word|'s encoding field |letter|."""
   value = 0
@@ -169,8 +189,11 @@ def field(info, word, letter):
 def memory_case(info, rng):
   """A word and registers for a load or store: the base register points into
   the middle of the data window, an index register is small and m0/m1 hold
-  small increments. None if base and index are one register."""
+  small increments. None if base and index are one register, or the word
+  writes a register twice."""
   word = random_word(info, rng)
+  if writes_a_register_twice(info, word):
+    return None
   regs = random_regs(rng)
   base = _MEMORY_OPERAND.search(info['syntax']).group(1)
   index = _INDEX.search(info['syntax'])
@@ -281,16 +304,25 @@ def compare(binja, cases):
 def cases_for(tags, iset, samples, seed=0, attribs=None):
   rng = random.Random(seed)
   attribs = op_attribs() if attribs is None else attribs
+  def attempt(info):
+    if attribs.get(tag, set()) & MEMORY_ATTRIBS:
+      return memory_case(info, rng)
+    word = random_word(info, rng)
+    if writes_a_register_twice(info, word):
+      return None
+    return word, random_regs(rng)
+
   cases = []
   for tag in tags:
     for _ in range(samples):
-      if attribs.get(tag, set()) & MEMORY_ATTRIBS:
-        case = None
-        while case is None:
-          case = memory_case(iset[tag], rng)
-        cases.append((tag,) + case)
+      # Retry words a case cannot use; a tag that never gives one fails.
+      for _ in range(1000):
+        case = attempt(iset[tag])
+        if case is not None:
+          break
       else:
-        cases.append((tag, random_word(iset[tag], rng), random_regs(rng)))
+        raise ValueError('no usable random word for ' + tag)
+      cases.append((tag,) + case)
   return cases
 
 

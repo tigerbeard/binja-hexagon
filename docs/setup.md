@@ -89,6 +89,23 @@ lifted IL with QEMU's `qemu-system-hexagon` when it is installed (set
 `QEMU_HEXAGON` if it is not on `PATH`). `tests/qemu_diff.py` runs that
 comparison on its own, for chosen instructions and more random cases.
 
+QEMU runs its newest CPU, or `QEMU_HEXAGON_CPU` (e.g. `v79`), and only
+instructions that CPU has are compared. QEMU releases stop at V73. Qualcomm's
+QEMU, whose `hex-next` branch the instruction definitions come from, runs up
+to V85, which adds the V79 `:nt` stores and newer instructions:
+
+```
+$ git clone --depth 1 --branch hex-next https://github.com/quic/qemu
+$ cd qemu && mkdir build && cd build
+$ ../configure --target-list=hexagon-softmmu --disable-hexagon-idef-parser
+$ ninja qemu-system-hexagon
+$ export QEMU_HEXAGON=$PWD/qemu-system-hexagon
+```
+
+`--disable-hexagon-idef-parser` avoids needing bison 3, which macOS lacks.
+On macOS, if `configure` reports that `cc` cannot compile programs, set
+`SDKROOT` to an older SDK, as for the plugin above.
+
 Without Binary Ninja, configure with `-DBN_ALLOW_STUBS=ON` and leave out the
 `bn` tests:
 

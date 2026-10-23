@@ -36,8 +36,9 @@ sys.path.insert(
 from il_test_util import instruction_lines, normalize_il  # noqa: E402
 
 LLVM_BIN = os.environ.get('HEXAGON_LLVM_BIN', '/opt/homebrew/opt/llvm/bin')
-MCPU = 'hexagonv79'
-MATTR = '+hvxv79,+hvx-length128b,+hvx-ieee-fp,+hvx-qfloat,+audio'
+# The newest Hexagon LLVM 23 knows. QEMU's instruction definitions reach V81.
+MCPU = 'hexagonv81'
+MATTR = '+hvxv81,+hvx-length128b,+hvx-ieee-fp,+hvx-qfloat,+audio'
 
 
 def llvm_tool(name):

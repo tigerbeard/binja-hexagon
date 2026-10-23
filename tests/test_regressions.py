@@ -411,6 +411,61 @@ f:
     self.assertEqual(llvm_diff.compare(binja, words), [])
 
 
+class TestUpstreamInstructions(SnippetTest):
+  # #41: instructions from QEMU's current definitions, V68 to V81. llvm-mc
+  # lacks the V79 :nt stores and cache operations, so those are words from
+  # the V79 PRM's encodings: memw(Rx++#s4:2):nt=Rt and dczeroa(Rs):nt.
+
+  SOURCE = '''
+f:
+  { callrh r2 }
+  { unpause }
+  { pause(#1000) }
+  { v0.qf32 = vadd(v1.sf, v2.sf) }
+  { v3.qf16 = vabs(v4.hf) }
+  { q0 = vcmp.eq(v1.sf, v2.sf) }
+  { dmstart(r0) }
+  { r5 = dmpoll }
+  .word 0xaa84d400
+  .word 0xa0cce000
+  { jumprh r31 }
+'''
+
+  def test_decodes_upstream_instructions(self):
+    f = self.analyse(self.SOURCE)['f']
+    self.assertEqual(
+        hexasm.disasm(binja, f), '''
+{ callrh R2 }
+{ unpause }
+{ pause(#0x3e8) }
+{ V0.qf32 = vadd(V1.sf,V2.sf) }
+{ V3.qf16 = vabs(V4.hf) }
+{ Q0 = vcmp.eq(V1.sf,V2.sf) }
+{ dmstart(R0) }
+{ R5 = dmpoll }
+{ memw(R4++#0x0):nt = R20 }
+{ dczeroa(R12):nt }
+{ jumprh LR }''')
+
+  def test_hinted_branches_and_nt_stores_lift_like_their_older_forms(self):
+    il = hexasm.llil(self.analyse(self.SOURCE)['f'])
+    # The call target is set before the call (it was an unset temp).
+    self.assertIn('0: temp#0.d = R2\n1: call(temp#0.d)', il)
+    self.assertRegex(il, r'\[temp#\d+\.d\]\.d = R20')
+    self.assertIn('R4 = temp#2.d', il)
+    self.assertTrue(il.endswith('<return> jump(LR)'), il)
+
+  def test_matches_llvm_for_new_encodings(self):
+    import llvm_diff
+    words = [w for tag, w in llvm_diff.pattern_words(
+        r'_(qf16|qf32|hf|sf|bf)(_|$)|qfext|^V6_valign4$|^V6_vmerge_qf$|'
+        r'_tmp$|^J2_(callrh|jumprh|unpause|pause)$|^Y2_tlbpp$|'
+        r'^Y6_dm(start|link|poll|wait|pause|resume)$|^V6_v6mpy|'
+        r'^V6_vasrvw?u|^V6_vmpyuhvs$')]
+    self.assertGreaterEqual(len(words), 119)
+    self.assertEqual(llvm_diff.compare(binja, words), [])
+
+
 class TestCallingConvention(SnippetTest):
   # #5: arguments R0-R8, no caller-saved registers, only FP and LR
   # callee-saved, and the callee popping stack arguments.

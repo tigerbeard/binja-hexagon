@@ -39,6 +39,7 @@ fbody: stmt* -> fbody
 
 ?stmt: "if" "(" expr ")" stmt [ "else" stmt ] -> if_stmt
      | expr "?" "(" assg ")" ":" "(" assg ")" -> ternary_stmt
+     | id "=" "(" expr "?" expr ":" expr ")" ";" -> assg_ternary_stmt
      | "while" "(" expr ")" stmt
      | "for" "(" [ assg ] ";" [ expr ] ";" [ assg ] ")" stmt
      | "return" [ expr ] ";"
@@ -1661,6 +1662,14 @@ class SemanticsTreeTransformer(Transformer):
   def ternary_stmt(self, args):
     assert (len(args) == 3)
     return self.if_stmt(args)
+
+  #   | id "=" "(" expr "?" expr ":" expr ")" ";" -> assg_ternary_stmt
+  @v_args(inline=True)
+  def assg_ternary_stmt(self, lvalue, cond, tvalue, fvalue):
+    # a = (c ? t : f) => if (c) a = t; else a = f;
+    return self.if_stmt(
+        [cond, self.assg(lvalue, tvalue),
+         self.assg(lvalue, fvalue)])
 
   #   | assg ";" -> assg_stmt
   @v_args(inline=True)

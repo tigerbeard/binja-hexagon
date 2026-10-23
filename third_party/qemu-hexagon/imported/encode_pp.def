@@ -1,5 +1,5 @@
 /*
- *  Copyright(c) 2019-2020 Qualcomm Innovation Center, Inc. All Rights Reserved.
+ *  Copyright(c) 2019-2023 Qualcomm Innovation Center, Inc. All Rights Reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -382,24 +382,32 @@ DEF_ENC32(L4_return_fnew_pt,  ICLASS_LD" 011 0 000 sssss PP1110vv ---ddddd")
 DEF_ENC32(L4_return_tnew_pnt, ICLASS_LD" 011 0 000 sssss PP0010vv ---ddddd")
 DEF_ENC32(L4_return_fnew_pnt, ICLASS_LD" 011 0 000 sssss PP1010vv ---ddddd")
 
-/* V71 narrowed the LL/SC encodings to make room for acquire and release. */
-DEF_ENC32(L2_loadw_locked,ICLASS_LD" 001 0 000 sssss PP000--- 000ddddd")
-DEF_ENC32(L2_loadw_aq,    ICLASS_LD" 001 0 000 sssss PP001--- 000ddddd")
-DEF_ENC32(L4_loadw_phys,  ICLASS_LD" 001 0 000 sssss PP1ttttt -00ddddd")
+/** Load Acquire Store Release Encoding **/
+
+DEF_ENC32(L4_loadw_phys,      ICLASS_LD" 001 0 000 sssss PP1ttttt -00ddddd")
+DEF_ENC32(L2_loadw_locked,    ICLASS_LD" 001 0 000 sssss PP000--- 000ddddd")
+DEF_ENC32(L4_loadd_locked,    ICLASS_LD" 001 0 000 sssss PP010--- 000ddddd")
+
+DEF_ENC32(L2_loadw_aq,        ICLASS_LD" 001 0 000 sssss PP001--- 000ddddd")
+DEF_ENC32(L4_loadd_aq,        ICLASS_LD" 001 0 000 sssss PP011--- 000ddddd")
 
 
+DEF_ENC32(S2_storew_locked,   ICLASS_ST" 000 01 01sssss PP-ttttt ----00dd")
+DEF_ENC32(S4_stored_locked,   ICLASS_ST" 000 01 11sssss PP0ttttt ----00dd")
 
 
+DEF_ENC32(S2_storew_rl_at_vi,  ICLASS_ST" 000 01 01sssss PP-ttttt --0010dd")
+DEF_ENC32(S2_storew_rl_st_vi, ICLASS_ST" 000 01 01sssss PP-ttttt --1010dd")
 
+DEF_ENC32(S4_stored_rl_at_vi,  ICLASS_ST" 000 01 11sssss PP0ttttt --0010dd")
+DEF_ENC32(S4_stored_rl_st_vi, ICLASS_ST" 000 01 11sssss PP0ttttt --1010dd")
 
-DEF_ENC32(L4_loadd_locked,ICLASS_LD" 001 0 000 sssss PP010--- 000ddddd")
-DEF_ENC32(L4_loadd_aq,    ICLASS_LD" 001 0 000 sssss PP011--- 000ddddd")
-DEF_EXT_SPACE(EXTRACTW,   ICLASS_LD" 001 0 000 iiiii PP0iiiii -01iiiii")
+DEF_ENC32(R6_release_at_vi,    ICLASS_ST" 000 01 11sssss PP0ttttt --0011dd")
+DEF_ENC32(R6_release_st_vi,   ICLASS_ST" 000 01 11sssss PP0ttttt --1011dd")
+
+DEF_EXT_SPACE(EXTRACTW,   ICLASS_LD" 001 0 000 iiiii PP0iiiii 001iiiii")
 DEF_ENC32(Y2_dcfetchbo,   ICLASS_LD" 010 0 000 sssss PP0--iii iiiiiiii")
-
-
-
-
+DEF_ENC32(Y2_dcfetchbo_nt,"10010100000sssssPP10-iiiiiiiiiii")
 
 
 
@@ -466,6 +474,13 @@ STD_ST_ENC(rbnew, "1 101","00ttt")
 STD_ST_ENC(rhnew, "1 101","01ttt")
 STD_ST_ENC(rinew, "1 101","10ttt")
 
+/* Non-temporal post-increment stores: the OPC nibble's high bit, always
+ * 1 above, is repurposed as the "nt" hint for this addressing mode only. */
+DEF_ENC32(S2_storerb_pi_nt,"10101010000xxxxxPP0ttttt0iiii-0-")
+DEF_ENC32(S2_storerh_pi_nt,"10101010010xxxxxPP0ttttt0iiii-0-")
+DEF_ENC32(S2_storeri_pi_nt,"10101010100xxxxxPP0ttttt0iiii-0-")
+DEF_ENC32(S2_storerd_pi_nt,"10101010110xxxxxPP0ttttt0iiii-00")
+
 STD_PST_ENC(rb,    "1 000","ttttt")
 STD_PST_ENC(rh,    "1 010","ttttt")
 STD_PST_ENC(rf,    "1 011","ttttt")
@@ -475,6 +490,16 @@ STD_PST_ENC(rbnew, "1 101","00ttt")
 STD_PST_ENC(rhnew, "1 101","01ttt")
 STD_PST_ENC(rinew, "1 101","10ttt")
 
+/* Predicated forms of the non-temporal post-increment stores above. */
+DEF_ENC32(S2_pstorerbt_pi_nt,"10101010000xxxxxPP1ttttt0iiii0vv")
+DEF_ENC32(S2_pstorerbf_pi_nt,"10101010000xxxxxPP1ttttt0iiii1vv")
+DEF_ENC32(S2_pstorerht_pi_nt,"10101010010xxxxxPP1ttttt0iiii0vv")
+DEF_ENC32(S2_pstorerhf_pi_nt,"10101010010xxxxxPP1ttttt0iiii1vv")
+DEF_ENC32(S2_pstorerit_pi_nt,"10101010100xxxxxPP1ttttt0iiii0vv")
+DEF_ENC32(S2_pstorerif_pi_nt,"10101010100xxxxxPP1ttttt0iiii1vv")
+DEF_ENC32(S2_pstorerdt_pi_nt,"10101010110xxxxxPP1ttttt0iiii0vv")
+DEF_ENC32(S2_pstorerdf_pi_nt,"10101010110xxxxxPP1ttttt0iiii1vv")
+
 
 
 /* User */
@@ -483,20 +508,12 @@ STD_PST_ENC(rinew, "1 101","10ttt")
 /*                               x bus/cache     */
 /*                                    x store/cache     */
 DEF_ENC32(S2_allocframe,   ICLASS_ST" 000 01 00xxxxx PP000iii iiiiiiii")
-DEF_ENC32(S2_storew_locked,ICLASS_ST" 000 01 01sssss PP-ttttt ----00dd")
-DEF_ENC32(S2_storew_rl_at_vi,ICLASS_ST" 000 01 01sssss PP-ttttt --0010--")
-DEF_ENC32(S2_storew_rl_st_vi,ICLASS_ST" 000 01 01sssss PP-ttttt --1010--")
-DEF_ENC32(S4_stored_locked,ICLASS_ST" 000 01 11sssss PP0ttttt ----00dd")
-DEF_ENC32(S4_stored_rl_at_vi,ICLASS_ST" 000 01 11sssss PP0ttttt --0010--")
-DEF_ENC32(S4_stored_rl_st_vi,ICLASS_ST" 000 01 11sssss PP0ttttt --1010--")
-DEF_ENC32(R6_release_at_vi,ICLASS_ST" 000 01 11sssss PP0----- --0011--")
-DEF_ENC32(R6_release_st_vi,ICLASS_ST" 000 01 11sssss PP0----- --1011--")
 DEF_ENC32(Y5_l2locka,      ICLASS_ST" 000 01 11sssss PP1----- ------dd")
 DEF_ENC32(Y2_dczeroa,      ICLASS_ST" 000 01 10sssss PP0----- --------")
+DEF_ENC32(Y2_dczeroa_nt,"10100000110sssssPP1-------------")
 
 
 DEF_ENC32(Y2_barrier,      ICLASS_ST" 100 00 00----- PP------ 000-----")
-DEF_ENC32(Y2_dmsyncht,     ICLASS_ST" 100 00 00----- PP-----0 111ddddd")
 DEF_ENC32(Y2_syncht,       ICLASS_ST" 100 00 10----- PP------ --------")
 DEF_ENC32(Y2_l2kill,       ICLASS_ST" 100 00 01----- PP-000-- --------")
 DEF_ENC32(Y5_l2gunlock,    ICLASS_ST" 100 00 01----- PP-010-- --------")
@@ -522,7 +539,7 @@ DEF_ENC32(Y2_dctagr       ,ICLASS_ST" 010 00 01sssss PP------ ---ddddd")
 DEF_ENC32(Y4_l2tagw       ,ICLASS_ST" 010 00 10sssss PP0ttttt --------")
 DEF_ENC32(Y4_l2tagr       ,ICLASS_ST" 010 00 11sssss PP------ ---ddddd")
 
-DEF_ENC32(Y4_l2fetch,      ICLASS_ST" 011 00 00sssss PP-ttttt 000-----")
+DEF_ENC32(Y4_l2fetch,          ICLASS_ST" 011 00 00sssss PP-ttttt 000-----")
 DEF_ENC32(Y5_l2cleanidx,   ICLASS_ST" 011 00 01sssss PP------ --------")
 DEF_ENC32(Y5_l2invidx,     ICLASS_ST" 011 00 10sssss PP------ --------")
 DEF_ENC32(Y5_l2unlocka,    ICLASS_ST" 011 00 11sssss PP------ --------")
@@ -531,15 +548,16 @@ DEF_ENC32(Y5_l2fetch,      ICLASS_ST" 011 01 00sssss PP-ttttt --------")
 DEF_ENC32(Y6_l2gcleanpa,   ICLASS_ST" 011 01 01----- PP-ttttt --------")
 DEF_ENC32(Y6_l2gcleaninvpa,ICLASS_ST" 011 01 10----- PP-ttttt --------")
 
-
-
-
-
-
-
-
-
-
+DEF_ENC32(Y6_dmcfgrd,   "10101000000sssssPP------101ddddd")
+DEF_ENC32(Y6_dmcfgwr,   "10101000000sssssPP-ttttt110-----")
+DEF_ENC32(Y6_dmlink,    "10100110000sssssPP-ttttt010-----")
+DEF_ENC32(Y6_dmpause,   "10101000000-----PP------011ddddd")
+DEF_ENC32(Y6_dmpoll,    "10101000000-----PP------010ddddd")
+DEF_ENC32(Y6_dmresume,  "10100110000sssssPP------100-----")
+DEF_ENC32(Y6_dmstart,   "10100110000sssssPP------001-----")
+DEF_ENC32(Y6_dmsyncht,  "10101000000-----PP-----0111ddddd")
+DEF_ENC32(Y6_dmtlbsynch,"10101000000-----PP-----1111ddddd")
+DEF_ENC32(Y6_dmwait,    "10101000000-----PP------001ddddd")
 
 
 /*******************************/
@@ -561,6 +579,7 @@ DEF_FIELD32(ICLASS_J" 110- -------- PP-!---- --------",J_PT,"Predict-taken")
 
 DEF_FIELDROW_DESC32(ICLASS_J" 0000 -------- PP------ --------","[#0] PC=(Rs), R31=return")
 DEF_ENC32(J2_callr,     ICLASS_J" 0000  101sssss  PP------  --------")
+DEF_ENC32(J2_callrh,    ICLASS_J" 0000  110sssss  PP------  --------")
 
 DEF_FIELDROW_DESC32(ICLASS_J" 0001 -------- PP------ --------","[#1] if (Pu) PC=(Rs), R31=return")
 DEF_ENC32(J2_callrt,    ICLASS_J" 0001  000sssss  PP----uu  --------")
@@ -568,6 +587,7 @@ DEF_ENC32(J2_callrf,    ICLASS_J" 0001  001sssss  PP----uu  --------")
 
 DEF_FIELDROW_DESC32(ICLASS_J" 0010 -------- PP------ --------","[#2] PC=(Rs); ")
 DEF_ENC32(J2_jumpr,      ICLASS_J" 0010  100sssss  PP------  --------")
+DEF_ENC32(J2_jumprh,     ICLASS_J" 0010  110sssss  PP------  --------")
 DEF_ENC32(J4_hintjumpr,  ICLASS_J" 0010  101sssss  PP------  --------")
 
 DEF_FIELDROW_DESC32(ICLASS_J" 0011 -------- PP------ --------","[#3] if (Pu) PC=(Rs) ")
@@ -583,7 +603,8 @@ DEF_ENC32(J2_jumprfnewpt, ICLASS_J" 0011  011sssss  PP-11-uu  --------")
 DEF_FIELDROW_DESC32(ICLASS_J" 0100 -------- PP------ --------","[#4] (#u8) ")
 DEF_ENC32(J2_trap0,     ICLASS_J" 0100  00------  PP-iiiii  ---iii--")
 DEF_ENC32(J2_trap1,     ICLASS_J" 0100  10-xxxxx  PP-iiiii  ---iii--")
-DEF_ENC32(J2_pause,     ICLASS_J" 0100  01------  PP-iiiii  ---iii--")
+DEF_ENC32(J2_pause,     ICLASS_J" 0100  01----ii  PP-iiiii  ---iii--")
+DEF_ENC32(J2_unpause,"01010111111-----PP01----000-----")
 
 DEF_FIELDROW_DESC32(ICLASS_J" 0101 -------- PP------ --------","[#5] Rd=(Rs) ")
 DEF_ENC32(Y2_icdatar,   ICLASS_J" 0101  101sssss  PP------  ---ddddd")
@@ -861,9 +882,6 @@ DEF_ENC32(Y2_iassignr, ICLASS_CR" 0110 011sssss PP------ ---ddddd")
 
 DEF_FIELDROW_DESC32(   ICLASS_CR" 0111 -------- PP------  --------","[#7] cr=Rs ")
 DEF_ENC32(Y2_tfrsrcr,  ICLASS_CR" 0111 00-sssss PP------ -ddddddd")
-#ifdef PTWALK
-DEF_ENC32(Y6_tfrarcr,  ICLASS_CR" 0111 01-sssss PP------ --dddddd")
-#endif
 
 DEF_FIELDROW_DESC32(   ICLASS_CR" 1100 -------- PP------  --------","[#12] ")
 DEF_ENC32(Y2_break,    ICLASS_CR" 1100 001----- PP------ 000-----")
@@ -872,6 +890,7 @@ DEF_ENC32(Y2_tlbunlock,ICLASS_CR" 1100 001----- PP------ 010-----")
 DEF_ENC32(Y2_k0lock,   ICLASS_CR" 1100 001----- PP------ 011-----")
 DEF_ENC32(Y2_k0unlock, ICLASS_CR" 1100 001----- PP------ 100-----")
 DEF_ENC32(Y2_tlbp,     ICLASS_CR" 1100 100sssss PP------ ---ddddd")
+DEF_ENC32(Y2_tlbpp,"01101100011sssssPP---------ddddd")
 DEF_ENC32(Y5_tlboc,    ICLASS_CR" 1100 111sssss PP------ ---ddddd")
 DEF_ENC32(Y5_tlbasidi, ICLASS_CR" 1100 101sssss PP------ --------")
 DEF_ENC32(Y2_tlbr,     ICLASS_CR" 1100 010sssss PP------ ---ddddd")
@@ -881,21 +900,12 @@ DEF_ENC32(Y5_ctlbw,    ICLASS_CR" 1100 110sssss PP0ttttt ---ddddd")
 DEF_FIELDROW_DESC32(   ICLASS_CR" 1101 -------- PP------  --------","[#13] Rxx ")
 DEF_ENC32(Y4_crswap10, ICLASS_CR" 1101 10-xxxxx PP------ ---00000")
 DEF_ENC32(Y4_tfrspcp,  ICLASS_CR" 1101 00-sssss PP------ -ddddddd")
-#ifdef PTWALK
-DEF_ENC32(Y6_tfrapcp,  ICLASS_CR" 1101 01-sssss PP------ --dddddd")
-#endif
 
 DEF_FIELDROW_DESC32(   ICLASS_CR" 1110 -------- PP------  --------","[#14] Rd=cr ")
 DEF_ENC32(Y2_tfrscrr,  ICLASS_CR" 1110 1sssssss PP------ ---ddddd")
-#ifdef PTWALK
-DEF_ENC32(Y6_tfracrr,  ICLASS_CR" 1110 0-ssssss PP------ ---ddddd")
-#endif
 
 DEF_FIELDROW_DESC32(   ICLASS_CR" 1111 -------- PP------  --------","[#15] Rdd=Sss ")
 DEF_ENC32(Y4_tfrscpp,  ICLASS_CR" 1111 0sssssss PP------ ---ddddd")
-#ifdef PTWALK
-DEF_ENC32(Y6_tfracpp,  ICLASS_CR" 1111 1-ssssss PP------ ---ddddd")
-#endif
 
 
 
@@ -1078,13 +1088,6 @@ MPY_ENC(F2_dfmpyfix,         "1000","ddddd","0","0","1","0","11")
 MPY_ENC(F2_dfmin,            "1000","ddddd","0","0","1","1","11")
 MPY_ENC(F2_dfmax,            "1000","ddddd","0","1","0","0","11")
 MPY_ENC(F2_dfmpyll,          "1000","ddddd","0","1","0","1","11")
-#ifdef ADD_DP_OPS
-MPY_ENC(F2_dfdivcheat,       "1000","ddddd","0","0","0","1","00")
-
-MPY_ENC(F2_dffixupn,         "1000","ddddd","0","1","0","1","11")
-MPY_ENC(F2_dffixupd,         "1000","ddddd","0","1","1","0","11")
-MPY_ENC(F2_dfrecipa,         "1000","ddddd","0","1","1","1","ee")
-#endif
 
 MPY_ENC(M7_dcmpyrw,          "1000","ddddd","0","0","0","1","10")
 MPY_ENC(M7_dcmpyrwc,         "1000","ddddd","0","0","1","1","10")
@@ -1158,15 +1161,6 @@ MPY_ENC(M5_vdmacbsu,         "1010","xxxxx","0","1","0","0","01")
 
 MPY_ENC(F2_dfmpylh,          "1010","xxxxx","0","0","0","0","11")
 MPY_ENC(F2_dfmpyhh,          "1010","xxxxx","0","0","0","1","11")
-#ifdef ADD_DP_OPS
-MPY_ENC(F2_dfmpyhh,          "1010","xxxxx","0","0","1","0","11")
-MPY_ENC(F2_dffma,            "1010","xxxxx","0","0","0","0","11")
-MPY_ENC(F2_dffms,            "1010","xxxxx","0","0","0","1","11")
-
-MPY_ENC(F2_dffma_lib,        "1010","xxxxx","0","0","1","0","11")
-MPY_ENC(F2_dffms_lib,        "1010","xxxxx","0","0","1","1","11")
-MPY_ENC(F2_dffma_sc,         "1010","xxxxx","0","1","1","1","uu")
-#endif
 
 
 MPY_ENC(M7_dcmpyrw_acc,      "1010","xxxxx","0","0","0","1","10")
@@ -1681,15 +1675,8 @@ SH2_RR_ENC(F2_conv_df2d,      "0000","111","0","0 00","ddddd")
 SH2_RR_ENC(F2_conv_df2ud,     "0000","111","0","0 01","ddddd")
 SH2_RR_ENC(F2_conv_ud2df,     "0000","111","0","0 10","ddddd")
 SH2_RR_ENC(F2_conv_d2df,      "0000","111","0","0 11","ddddd")
-#ifdef ADD_DP_OPS
-SH2_RR_ENC(F2_dffixupr,       "0000","111","0","1 00","ddddd")
-SH2_RR_ENC(F2_dfsqrtcheat,    "0000","111","0","1 01","ddddd")
-#endif
 SH2_RR_ENC(F2_conv_df2d_chop, "0000","111","0","1 10","ddddd")
 SH2_RR_ENC(F2_conv_df2ud_chop,"0000","111","0","1 11","ddddd")
-#ifdef ADD_DP_OPS
-SH2_RR_ENC(F2_dfinvsqrta,     "0000","111","1","0 ee","ddddd")
-#endif
 
 
 
@@ -1823,7 +1810,6 @@ SH_RRI5_ENC(A4_round_ri_sat,         "1100","111",            "11-","ddddd")
 DEF_ENC32(S2_setbit_i,   ICLASS_S2op" 1100   110sssss PP0iiiii 000ddddd")
 DEF_ENC32(S2_clrbit_i,   ICLASS_S2op" 1100   110sssss PP0iiiii 001ddddd")
 DEF_ENC32(S2_togglebit_i,ICLASS_S2op" 1100   110sssss PP0iiiii 010ddddd")
-DEF_ENC32(S4_lsli       ,ICLASS_S2op" 1100   110sssss PPiiiiii 011ddddd")
 
 DEF_ENC32(S4_clbaddi    ,ICLASS_S2op" 1100   001sssss PPiiiiii 000ddddd")
 

@@ -323,6 +323,12 @@ def print_op_info(f):
         imm_letter = 'i'
       else:
         imm_letter = 'I'
+      # The encoding decides the width, as in QEMU's decodetree decoder: V79
+      # widened J2_pause's immediate to ten bits, but its syntax says #u8.
+      encoded_width = sum(
+          m.end() - m.start() for m in re.finditer(imm_letter + '+', enc))
+      if encoded_width > imm_width:
+        imm_width = encoded_width
       remainder = imm_width
       for m in reversed(list(re.finditer(imm_letter + '+', enc))):
         remainder -= m.end() - m.start()

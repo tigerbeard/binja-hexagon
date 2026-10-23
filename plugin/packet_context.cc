@@ -136,6 +136,49 @@ void PacketContext::WriteClobberedRegs() {
   }
 }
 
+void PacketContext::SetBranchCondition(int insn_num,
+                                       std::function<ExprId()> condition,
+                                       std::vector<int> reads) {
+  branch_conditions_[insn_num] = {std::move(condition), std::move(reads)};
+}
+
+std::optional<ExprId> PacketContext::StableBranchCondition(int insn_num) {
+  auto it = branch_conditions_.find(insn_num);
+  if (it == branch_conditions_.end()) {
+    return std::nullopt;
+  }
+  for (int reg : it->second.reads) {
+    if (Writes(reg)) {
+      return std::nullopt;
+    }
+  }
+  return it->second.build();
+}
+
+bool PacketContext::Writes(int reg) const {
+  // allocframe, deallocframe and dealloc_return write SP, FP and LR directly.
+  if (reg == HEX_REG_SP || reg == HEX_REG_FP || reg == HEX_REG_LR) {
+    return true;
+  }
+  if (regs_.count(kSingleRegSubspace * NUM_HEX_REGS + reg)) {
+    return true;
+  }
+  if (reg >= HEX_REG_P0 && reg <= HEX_REG_P3) {
+    // The predicates are parts of C4 (P3:0).
+    return regs_.count(kSingleRegSubspace * NUM_HEX_REGS + HEX_REG_P3_0) > 0;
+  }
+  if (reg == HEX_REG_P3_0) {
+    for (int p = HEX_REG_P0; p <= HEX_REG_P3; p++) {
+      if (regs_.count(kSingleRegSubspace * NUM_HEX_REGS + p)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  // A destination pair that contains the register.
+  return regs_.count(kDestPairSubspace * NUM_HEX_REGS + (reg & ~1)) > 0;
+}
+
 size_t TempRegSize(uint32_t index) {
   if (index < kFixedTempBase) {
     switch (index / NUM_HEX_REGS) {

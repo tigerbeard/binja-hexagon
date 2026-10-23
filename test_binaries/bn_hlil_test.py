@@ -111,11 +111,8 @@ g_res = *(a + 8) + b''')
     func = self.get_function('test_fact')
     self.assertEqual(
         self.list_hlil(func), '''
-char temp210 = 0
-if (a != 0)
-    temp210 = 1
 int32_t result
-if (temp210 == 1)
+if (a != 0)
     result = test_fact(a - 1) * a
 else
     result = 1
@@ -149,20 +146,12 @@ g_res = 0xffffffff - a''')
     func = self.get_function('test_collatz')
     self.assertEqual(
         self.list_hlil(func), '''
-int a_1 = a
-while (true)
-    char temp210_1 = 0
-    if (a_1 == 1)
-        temp210_1 = 1
-    if (temp210_1 == 1)
-        break
-    char temp210_2 = 0
-    if ((a_1 & 1) != 0)
-        temp210_2 = 1
-    if (temp210_2 == 1)
-        a_1 = 1 + a_1 * 3
+int i = a
+while (i != 1)
+    if ((i & 1) != 0)
+        i = 1 + i * 3
     else
-        a_1 s>>= 1''')
+        i s>>= 1''')
 
   def test_max_signed_int(self):
     func = self.get_function('test_max_signed_int')

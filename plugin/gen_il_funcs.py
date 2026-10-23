@@ -2138,6 +2138,7 @@ def gen_il_func(tag, regs, imms):
     prog += process_semantics(tag, parts[0])
 
   lines = []
+  branch_condition = find_branch_condition(tag, prog)
   for il_insn in prog:
     if isinstance(il_insn, IlBranch):
       # Branch instructions are deferred to the end of the packet.
@@ -2155,7 +2156,54 @@ def gen_il_func(tag, regs, imms):
     else:
       assert (0)
 
+  if branch_condition:
+    cond, reads = branch_condition
+    lines.append(
+        '''ctx.SetBranchCondition(insn_num, [=, &il]() {{ return {0}; }}, {{{1}}});'''
+        .format(cond, ', '.join(reads)))
   return '\n'.join(lines)
+
+
+def find_branch_condition(tag, prog):
+  """Returns (condition, registers it reads) of a conditional branch.
+
+  A conditional jump or call lifts as `if (cond) { branch-taken flag = 1 }`,
+  and the branch is taken at the end of the packet. If the packet does not
+  write the registers the condition reads, the end of the packet can test the
+  condition itself (PacketContext::SetBranchCondition). The registers are the
+  old-value operands (RsV, PuV) and fixed registers (HEX_REG_*); new values
+  (PuN, Pd0) are temps the packet's write-back leaves alone.
+  """
+  attribs = attribdict[tag]
+  if ('A_BN_COND_J' not in attribs or 'A_HWLOOP0_END' in attribs or
+      'A_HWLOOP1_END' in attribs):
+    return None
+  taken = [
+      k for k, insn in enumerate(prog) if isinstance(insn, IlSetRegister) and
+      insn.reg == 'BRANCH_TAKEN_ARRAY + insn_num'
+  ]
+  if len(taken) != 1:
+    return None
+  # The branch's `if` is the last one before the flag is set.
+  guards = [
+      insn for insn in prog[:taken[0]]
+      if isinstance(insn, IlIf) and insn.t == 'true_case'
+  ]
+  if not guards:
+    return None
+  cond = guards[-1].cond
+  reads = []
+
+  def collect(expr):
+    if isinstance(expr, IlRegister):
+      if re.fullmatch(r'[A-Z][a-z]{1,2}V|HEX_REG_\w+', expr.reg):
+        reads.append(expr.reg)
+    for value in vars(expr).values():
+      if isinstance(value, IlExprId):
+        collect(value)
+
+  collect(cond)
+  return str(cond), uniquify(reads)
 
 
 # Opcodes without lifted semantics are lifted as intrinsics (plugin/

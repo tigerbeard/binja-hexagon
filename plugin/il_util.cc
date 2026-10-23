@@ -266,9 +266,9 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch, uint64_t pc,
         FillBnInstructionLowLevelImpl(arch, pc, pkt, insn, i, *ctx));
   }
 
-  // Write back all clobbered registers, and clear context.
+  // Write back all clobbered registers. The context lives on for the
+  // branches, which may test their conditions directly.
   ctx->WriteClobberedRegs();
-  ctx.reset(nullptr);
 
   // Branch semantics. See comment above.
   if (pkt.pkt_has_cof) {
@@ -285,10 +285,15 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch, uint64_t pc,
       if (IsJump(insn) || IsCall(insn)) {
         LowLevelILLabel branch_case, next_insn;
         if (IsCondJump(insn)) {
-          il.AddInstruction(
-              il.If(il.CompareEqual(1, il.Register(1, BRANCH_TAKEN_ARRAY + i),
-                                    il.Const(1, 1)),
-                    branch_case, next_insn));
+          // Test the branch's own condition when the packet left its inputs
+          // unchanged; otherwise the flag the instruction set. (The flag's
+          // code is then dead, and analysis drops it.)
+          std::optional<ExprId> cond = ctx->StableBranchCondition(i);
+          il.AddInstruction(il.If(
+              cond ? *cond
+                   : il.CompareEqual(1, il.Register(1, BRANCH_TAKEN_ARRAY + i),
+                                     il.Const(1, 1)),
+              branch_case, next_insn));
           il.MarkLabel(branch_case);
         }
         if (IsIndirect(insn) && IsJump(insn)) {
@@ -307,8 +312,15 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch, uint64_t pc,
           // packet.
           il.AddInstruction(il.Goto(done));
         } else if (IsJump(insn)) {
-          il.AddInstruction(
-              il.Jump(il.ConstPointer(4, pc + insn.immed[0])));
+          // Go to the target's label when the function has one. A packet
+          // with two jumps has two branch targets, and Binary Ninja gives a
+          // constant jump of the packet both of them.
+          const uint64_t target = pc + insn.immed[0];
+          if (BNLowLevelILLabel *label = il.GetLabelForAddress(arch, target)) {
+            il.AddInstruction(il.Goto(*label));
+          } else {
+            il.AddInstruction(il.Jump(il.ConstPointer(4, target)));
+          }
         } else {
           if (!IsCall(insn)) {
             return absl::InternalError(

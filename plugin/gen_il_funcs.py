@@ -1515,6 +1515,11 @@ class SemanticsTreeTransformer(Transformer):
       return val
     return IlZeroExtend(8, val)
 
+  def macro_expr_fCONST64(self, args):
+    # A 64-bit literal (fCONSTLL).
+    assert (len(args) == 1 and args[0].type == 'INTCON')
+    return IlConst(8, args[0].value)
+
   def macro_expr_f8BITSOF(self, args):
     # macros.h
     # #define f8BITSOF(VAL) ((VAL) ? 0xff : 0x00)
@@ -2140,17 +2145,24 @@ def preprocess_semantics(tag):
   cpreprocessor.define('fFRAME_UNSCRAMBLE(VAL) VAL')
   cpreprocessor.define('fECHO(A) A')
   cpreprocessor.define('fLSBOLDNOT(VAL) !fLSBOLD(VAL)')
-  cpreprocessor.define('fCONSTLL(A) fCAST8s(A)')
+  # A##LL in QEMU: a 64-bit literal. (0x80000000 is unsigned in C, so a
+  # 32-bit literal sign-extended to 64 bits was negative.)
+  cpreprocessor.define('fCONSTLL(A) fCONST64(A)')
   cpreprocessor.define('fPAUSE(IMM)')
 
-  # zero/sign extend.
-  cpreprocessor.define('fZXTN(N, M, VAL) ((VAL) & ((1<<(N))-1))')
+  # zero/sign extend: the low N bits of VAL, as QEMU's extract64 and
+  # sextract64. Masks are M bits wide, so 64-bit values take N up to 63.
+  cpreprocessor.define('fXTN_ONE32 1')
+  cpreprocessor.define('fXTN_ONE64 fCAST8u(1)')
+  cpreprocessor.define(
+      'fZXTN(N, M, VAL) ((VAL) & ((fXTN_ONE##M<<(N))-1))')
   # The sign-extended value is signed at its width M (32 or 64); without the
   # cast it took the zero-extended mask's unsigned type.
   cpreprocessor.define('fSXTN_CAST32(A) fCAST4s(A)')
   cpreprocessor.define('fSXTN_CAST64(A) fCAST8s(A)')
   cpreprocessor.define('fSXTN(N, M, VAL) fSXTN_CAST##M('
-                       '((fZXTN(N,M,VAL) ^ (1<<((N)-1))) - (1<<((N)-1))))')
+                       '((fZXTN(N,M,VAL) ^ (fXTN_ONE##M<<((N)-1))) - '
+                       '(fXTN_ONE##M<<((N)-1))))')
 
   # Special branch macros.
   cpreprocessor.define('fCALL(A) { fBRANCH(A, COF_TYPE_CALL); }')

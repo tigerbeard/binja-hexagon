@@ -12,6 +12,12 @@ introduced each instruction, is copied for the tests.
 The generators and decoder are an older snapshot, which this plugin keeps
 because QEMU now decodes with decodetree.
 
+`overlay/` adds 17 instructions that `hex-next` lacks and LLVM decodes, from
+Qualcomm's `ds_master` branch: the HVX FP8 and `vcvt2` instructions and
+`memcpy`. Its `allidefs.def` and `encode.def` include the imported files and
+then the overlay's, and the generators and decoder include them in place of
+the imported ones. `overlay/tag_rev_info.c.inc` gives their versions.
+
 Local changes include:
 
 *  Added the plugin's attributes `A_BN_COND_J`, `A_BN_RETURN` and `A_BN_SYSTEM`,

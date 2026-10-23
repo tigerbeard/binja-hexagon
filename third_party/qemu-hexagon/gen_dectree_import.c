@@ -47,7 +47,7 @@ const char *const opcode_names[] = {
 const char *const opcode_syntax[XX_LAST_OPCODE] = {
 #define Q6INSN(TAG, BEH, ATTRIBS, DESCR, SEM) [TAG] = BEH,
 #define EXTINSN(TAG, BEH, ATTRIBS, DESCR, SEM) [TAG] = BEH,
-#include "third_party/qemu-hexagon/imported/allidefs.def"
+#include "third_party/qemu-hexagon/overlay/allidefs.def"
 #undef Q6INSN
 #undef EXTINSN
 };
@@ -77,7 +77,7 @@ const OpcodeEncoding opcode_encodings[] = {
 #define DEF_EXT_ENC(TAG, CLASS, ENCSTR)                                        \
   [TAG] = {.encoding = ENCSTR, .enc_class = CLASS},
 #define LEGACY_DEF_ENC32(TAG, ENCSTR) [TAG##_deprecated] = {.encoding = ENCSTR},
-#include "third_party/qemu-hexagon/imported/encode.def"
+#include "third_party/qemu-hexagon/overlay/encode.def"
 #undef DEF_ENC32
 #undef DEF_ENC_SUBINSN
 #undef DEF_EXT_ENC
@@ -90,7 +90,7 @@ const OpcodeEncoding opcode_encodings[] = {
  */
 static const int legacy_base[XX_LAST_OPCODE] = {
 #define LEGACY_DEF_ENC32(TAG, ENCSTR) [TAG##_deprecated] = TAG + 1,
-#include "third_party/qemu-hexagon/imported/encode.def"
+#include "third_party/qemu-hexagon/overlay/encode.def"
 #undef LEGACY_DEF_ENC32
 };
 
@@ -159,7 +159,7 @@ static void gen_enc_ext_spaces_table(FILE *out) {
   fprintf(out, "enc_ext_spaces = {\n");
 #define DEF_EXT_SPACE(SPACEID, ENCSTR)                                         \
   fprintf(out, "\t\'%s\' : \'%s\',\n", #SPACEID, ENCSTR);
-#include "third_party/qemu-hexagon/imported/encode.def"
+#include "third_party/qemu-hexagon/overlay/encode.def"
 #undef DEF_EXT_SPACE
   fprintf(out, "};\n\n");
 }
@@ -175,7 +175,7 @@ static void gen_subinsn_groupings_table(FILE *out) {
     fprintf(out, "\t\t\'enc\' : \'%s\',\n", ENCSTR);                           \
     fprintf(out, "\t},\n");                                                    \
   } while (0);
-#include "third_party/qemu-hexagon/imported/encode.def"
+#include "third_party/qemu-hexagon/overlay/encode.def"
 #undef DEF_PACKED32
   fprintf(out, "};\n\n");
 }

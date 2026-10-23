@@ -103,7 +103,7 @@ const OpcodeEncoding opcode_encodings[] = {
 /* Legacy encodings decode as TAG_deprecated (gen_semantics.c). */
 #define LEGACY_DEF_ENC32(TAG, ENCSTR) [TAG##_deprecated] = {.encoding = ENCSTR},
 
-#include "third_party/qemu-hexagon/imported/encode.def"
+#include "third_party/qemu-hexagon/overlay/encode.def"
 
 #undef DEF_ENC32
 #undef DEF_ENC_SUBINSN

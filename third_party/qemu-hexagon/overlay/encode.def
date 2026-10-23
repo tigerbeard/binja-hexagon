@@ -1,0 +1,3 @@
+/* QEMU's encodings, then the overlay's (README.md). */
+#include "third_party/qemu-hexagon/imported/encode.def"
+#include "third_party/qemu-hexagon/overlay/overlay_encode.def"

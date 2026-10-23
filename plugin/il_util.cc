@@ -203,8 +203,7 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch, uint64_t pc,
           il.MarkLabel(branch_case);
         }
         if (IsIndirect(insn) && IsJump(insn)) {
-          if (IsReturn(insn) ||
-              (insn.opcode == J2_jumpr && insn.regno[0] == HEX_REG_LR)) {
+          if (IsReturn(insn)) {
             il.AddInstruction(il.Return(il.Register(4, HEX_REG_LR)));
           } else {
             il.AddInstruction(il.Jump(il.Register(4, BRANCHR_DEST_ARRAY + i)));

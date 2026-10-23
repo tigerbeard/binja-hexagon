@@ -16,9 +16,12 @@
 
 #include "plugin/insn_util.h"
 
+#include <cstring>
+
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "glog/logging.h"
+#include "plugin/hex_regs.h"
 #include "plugin/status_macros.h"
 
 // Defined in insn_text_funcs_generated.cc.
@@ -65,7 +68,19 @@ bool IsIndirect(const Insn &insn) {
 bool IsCondJump(const Insn &insn) {
   return GET_ATTRIB(insn.opcode, A_BN_COND_J);
 }
-bool IsReturn(const Insn &insn) { return GET_ATTRIB(insn.opcode, A_BN_RETURN); }
+bool IsReturn(const Insn &insn) {
+  if (GET_ATTRIB(insn.opcode, A_BN_RETURN)) {
+    return true;
+  }
+  // `jumpr r31`, conditional or not, returns. opcode_reginfo lists the
+  // register operands in regno order; the jump target is the `s` operand.
+  if (!IsJump(insn) || !IsIndirect(insn)) {
+    return false;
+  }
+  const char *info = opcode_reginfo[insn.opcode];
+  const char *target = strchr(info, 's');
+  return target != nullptr && insn.regno[target - info] == HEX_REG_LR;
+}
 bool IsSystem(const Insn &insn) { return GET_ATTRIB(insn.opcode, A_BN_SYSTEM); }
 
 absl::Status FillBnInstructionInfo(uint64_t pc, const Packet &pkt,

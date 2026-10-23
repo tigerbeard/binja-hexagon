@@ -43,7 +43,7 @@ static const InsnText insn_texts[] = {
   {#TAG, STRINGIZE(BEH), STRINGIZE(SEM), STRINGIZE(ATTRIBS)},
 #define EXTINSN(TAG, BEH, ATTRIBS, DESCR, SEM)                                 \
   Q6INSN(TAG, BEH, ATTRIBS, DESCR, SEM)
-#include "third_party/qemu-hexagon/imported/allidefs.def"
+#include "third_party/qemu-hexagon/overlay/allidefs.def"
 #undef Q6INSN
 #undef EXTINSN
 };
@@ -130,14 +130,14 @@ int main(int argc, char *argv[]) {
             ")\n",                                                             \
             #TAG, STRINGIZE(ATTRIBS));                                         \
   } while (0);
-#include "third_party/qemu-hexagon/imported/allidefs.def"
+#include "third_party/qemu-hexagon/overlay/allidefs.def"
 #undef Q6INSN
 #undef EXTINSN
 
   {
     int errors = 0;
 #define LEGACY_DEF_ENC32(TAG, ENCSTR) errors += print_legacy_insn(outfile, #TAG);
-#include "third_party/qemu-hexagon/imported/encode.def"
+#include "third_party/qemu-hexagon/overlay/encode.def"
 #undef LEGACY_DEF_ENC32
     if (errors) {
       return 1;

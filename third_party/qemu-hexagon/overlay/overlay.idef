@@ -1,0 +1,104 @@
+/*
+ *  Copyright(c) 2019-2026 Qualcomm Innovation Center, Inc. All Rights Reserved.
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, see <http://www.gnu.org/licenses/>.
+ */
+
+/*
+ * Instructions that imported/ (hex-next) lacks, from the ds_master branch of
+ * Qualcomm's QEMU (quic/qemu 6edcb46, 2026-09-08): the HVX FP8 and vcvt2
+ * instructions (V79; the f8/qf16 conversions V81) and memcpy, all of which
+ * LLVM also decodes. The HVX definitions are the newest revision in
+ * mmvec/ext-v79.idef and ext-v81.idef, memcpy's is from semantics_auto.idef.
+ * Attributes that hex-next does not define (A_CVI_LATE, A_HVX_FP8,
+ * A_HVX_IEEE_FP_OUT_8, A_MEMCPY, A_NO_XML and notes) are left out.
+ */
+
+#ifndef EXTINSN
+#define EXTINSN Q6INSN
+#define __SELF_DEF_EXTINSN 1
+#endif
+
+EXTINSN(V6_vabs_f8,"Vd32.f8=vabs(Vu32.f8)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX),
+"Vector FP8 abs: f8",
+{ fHIDE(int i;) fVFOREACH(8, i) { VdV.f8[i] = fCHECK_IEEE_RESOURCE(fp_abs_8f(VuV.f8[i])); } })
+
+EXTINSN(V6_vfneg_f8,"Vd32.f8=vfneg(Vu32.f8)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX),
+"Vector FP8 neg: f8",
+{ fHIDE(int i;) fVFOREACH(8, i) { VdV.f8[i] = fCHECK_IEEE_RESOURCE(fp_neg_8f(VuV.f8[i])); } })
+
+EXTINSN(V6_vfmax_f8,"Vd32.f8=vfmax(Vu32.f8,Vv32.f8)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX),
+"Vector FP8 max: f8",
+{ fHIDE(int i;) fVFOREACH(8, i) { VdV.f8[i] = fCHECK_IEEE_RESOURCE(fp_max_8f(VuV.f8[i], VvV.f8[i])); } })
+
+EXTINSN(V6_vfmin_f8,"Vd32.f8=vfmin(Vu32.f8,Vv32.f8)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX),
+"Vector FP8 min: f8",
+{ fHIDE(int i;) fVFOREACH(8, i) { VdV.f8[i] = fCHECK_IEEE_RESOURCE(fp_min_8f(VuV.f8[i], VvV.f8[i])); } })
+
+EXTINSN(V6_vadd_hf_f8,"Vdd32.hf=vadd(Vu32.f8,Vv32.f8)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX_DV,A_HVX_IEEE_FP_OUT_16),
+"Vector FP8 add: f8 widen to hf",
+{ fHIDE(int i;) fVFOREACH(32, i) { VddV.v[0].hf[2*i] = fCHECK_IEEE_RESOURCE(fp_add_8f_8f(VuV.f8[4*i], VvV.f8[4*i])); VddV.v[0].hf[2*i+1] = fCHECK_IEEE_RESOURCE(fp_add_8f_8f(VuV.f8[4*i+2], VvV.f8[4*i+2])); VddV.v[1].hf[2*i] = fCHECK_IEEE_RESOURCE(fp_add_8f_8f(VuV.f8[4*i+1], VvV.f8[4*i+1])); VddV.v[1].hf[2*i+1] = fCHECK_IEEE_RESOURCE(fp_add_8f_8f(VuV.f8[4*i+3], VvV.f8[4*i+3])); } })
+
+EXTINSN(V6_vsub_hf_f8,"Vdd32.hf=vsub(Vu32.f8,Vv32.f8)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX_DV,A_HVX_IEEE_FP_OUT_16),
+"Vector FP8 sub: f8 widen to hf",
+{ fHIDE(int i;) fVFOREACH(32, i) { VddV.v[0].hf[2*i] = fCHECK_IEEE_RESOURCE(fp_sub_8f_8f(VuV.f8[4*i], VvV.f8[4*i])); VddV.v[0].hf[2*i+1] = fCHECK_IEEE_RESOURCE(fp_sub_8f_8f(VuV.f8[4*i+2], VvV.f8[4*i+2])); VddV.v[1].hf[2*i] = fCHECK_IEEE_RESOURCE(fp_sub_8f_8f(VuV.f8[4*i+1], VvV.f8[4*i+1])); VddV.v[1].hf[2*i+1] = fCHECK_IEEE_RESOURCE(fp_sub_8f_8f(VuV.f8[4*i+3], VvV.f8[4*i+3])); } })
+
+EXTINSN(V6_vmpy_hf_f8,"Vdd32.hf=vmpy(Vu32.f8,Vv32.f8)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX_DV,A_HVX_IEEE_FP_OUT_16),
+"Vector FP8 mul: f8 widen to hf",
+{ fHIDE(int i;) fVFOREACH(32, i) { VddV.v[0].hf[2*i] = fCHECK_IEEE_RESOURCE(fp_mult_8f_8f(VuV.f8[4*i], VvV.f8[4*i])); VddV.v[0].hf[2*i+1] = fCHECK_IEEE_RESOURCE(fp_mult_8f_8f(VuV.f8[4*i+2], VvV.f8[4*i+2])); VddV.v[1].hf[2*i] = fCHECK_IEEE_RESOURCE(fp_mult_8f_8f(VuV.f8[4*i+1], VvV.f8[4*i+1])); VddV.v[1].hf[2*i+1] = fCHECK_IEEE_RESOURCE(fp_mult_8f_8f(VuV.f8[4*i+3], VvV.f8[4*i+3])); } })
+
+EXTINSN(V6_vmpy_hf_f8_acc,"Vxx32.hf+=vmpy(Vu32.f8,Vv32.f8)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX_DV,A_HVX_IEEE_FP_OUT_16),
+"Vector FP8 fma: f8 widen to hf",
+{ fHIDE(int i;) fVFOREACH(32, i) { fCVI_VX_NO_TMP_LD(); VxxV.v[0].hf[2*i] = fCHECK_IEEE_RESOURCE(fp_mult_8f_8f_acc(VuV.f8[4*i], VvV.f8[4*i], VxxV.v[0].hf[2*i])); VxxV.v[0].hf[2*i+1] = fCHECK_IEEE_RESOURCE(fp_mult_8f_8f_acc(VuV.f8[4*i+2], VvV.f8[4*i+2], VxxV.v[0].hf[2*i+1])); VxxV.v[1].hf[2*i] = fCHECK_IEEE_RESOURCE(fp_mult_8f_8f_acc(VuV.f8[4*i+1], VvV.f8[4*i+1], VxxV.v[1].hf[2*i])); VxxV.v[1].hf[2*i+1] = fCHECK_IEEE_RESOURCE(fp_mult_8f_8f_acc(VuV.f8[4*i+3], VvV.f8[4*i+3], VxxV.v[1].hf[2*i+1])); } })
+
+EXTINSN(V6_vcvt_f8_hf,"Vd32.f8=vcvt(Vu32.hf,Vv32.hf)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX),
+"Vector cvt to fp8: hf narrow to f8",
+{ fHIDE(int i;) fVFOREACH(32, i) { VdV.f8[4*i] = fCHECK_IEEE_RESOURCE(f16_to_f8(VuV.hf[2*i], get_usr_reg_fpsat_field(thread))); VdV.f8[4*i+1] = fCHECK_IEEE_RESOURCE(f16_to_f8(VvV.hf[2*i], get_usr_reg_fpsat_field(thread))); VdV.f8[4*i+2] = fCHECK_IEEE_RESOURCE(f16_to_f8(VuV.hf[2*i+1], get_usr_reg_fpsat_field(thread))); VdV.f8[4*i+3] = fCHECK_IEEE_RESOURCE(f16_to_f8(VvV.hf[2*i+1], get_usr_reg_fpsat_field(thread))); } })
+
+EXTINSN(V6_vcvt_hf_f8,"Vdd32.hf=vcvt(Vu32.f8)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX_DV,A_HVX_IEEE_FP_OUT_16),
+"Vector cvt to fp16: f8 widen to hf",
+{ fHIDE(int i;) fVFOREACH(32, i) { VddV.v[0].hf[2*i] = fCHECK_IEEE_RESOURCE(f8_to_f16(VuV.f8[4*i])); VddV.v[0].hf[2*i+1] = fCHECK_IEEE_RESOURCE(f8_to_f16(VuV.f8[4*i+2])); VddV.v[1].hf[2*i] = fCHECK_IEEE_RESOURCE(f8_to_f16(VuV.f8[4*i+1])); VddV.v[1].hf[2*i+1] = fCHECK_IEEE_RESOURCE(f8_to_f16(VuV.f8[4*i+3])); } })
+
+EXTINSN(V6_vconv_f8_qf16,"Vd32.f8=Vu32.qf16",ATTRIBS(A_EXTENSION,A_CVI,A_CVI_VS,A_NOTE_SHIFT_RESOURCE),
+"Vector convert qf16 to f8",
+{ fHIDE(int i;) fVFOREACH(16, i) { fCONVERT_QF16_TO_F8(i, VdV, VuV) ; } })
+
+EXTINSN(V6_vconv_qf16_f8,"Vdd32.qf16=Vu32.f8",ATTRIBS(A_EXTENSION,A_CVI,A_CVI_VP_VS),
+"Vector convert to qf16: f8 widen to qf16",
+{ fHIDE(int i;) fVFOREACH(32, i) { fCONVERT_F8_TO_QF16(VddV,0,2*i,VuV.f8[4*i]) fCONVERT_F8_TO_QF16(VddV,1,2*i,VuV.f8[4*i+1]) fCONVERT_F8_TO_QF16(VddV,0,2*i+1,VuV.f8[4*i+2]) fCONVERT_F8_TO_QF16(VddV,1,2*i+1,VuV.f8[4*i+3]) ; } })
+
+EXTINSN(V6_vcvt2_b_hf,"Vd32.b=vcvt2(Vu32.hf,Vv32.hf)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX,A_HVX_IEEE_FP_OUT_16,A_HVX_IEEE_FP_OUT_32),
+"Vector cvt2 to int: hf narrow to b",
+{ fHIDE(int i;) fVFOREACH(32, i) { VdV.b[4*i] = fCHECK_IEEE_RESOURCE(f16_to_b(VuV.hf[2*i])); VdV.b[4*i+1] = fCHECK_IEEE_RESOURCE(f16_to_b(VvV.hf[2*i])); VdV.b[4*i+2] = fCHECK_IEEE_RESOURCE(f16_to_b(VuV.hf[2*i+1])); VdV.b[4*i+3] = fCHECK_IEEE_RESOURCE(f16_to_b(VvV.hf[2*i+1])); } })
+
+EXTINSN(V6_vcvt2_ub_hf,"Vd32.ub=vcvt2(Vu32.hf,Vv32.hf)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX,A_HVX_IEEE_FP_OUT_16,A_HVX_IEEE_FP_OUT_32),
+"Vector cvt2 to int: hf narrow to ub",
+{ fHIDE(int i;) fVFOREACH(32, i) { VdV.ub[4*i] = fCHECK_IEEE_RESOURCE(f16_to_ub(VuV.hf[2*i])); VdV.ub[4*i+1] = fCHECK_IEEE_RESOURCE(f16_to_ub(VvV.hf[2*i])); VdV.ub[4*i+2] = fCHECK_IEEE_RESOURCE(f16_to_ub(VuV.hf[2*i+1])); VdV.ub[4*i+3] = fCHECK_IEEE_RESOURCE(f16_to_ub(VvV.hf[2*i+1])); } })
+
+EXTINSN(V6_vcvt2_hf_b,"Vdd32.hf=vcvt2(Vu32.b)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX_DV,A_HVX_IEEE_FP_OUT_16),
+"Vector IEEE cvt2 from int: b widen to hf",
+{ fHIDE(int i;) fVFOREACH(32, i) { VddV.v[0].hf[2*i] = fCHECK_IEEE_RESOURCE(b_to_f16(VuV.b[4*i])); VddV.v[0].hf[2*i+1] = fCHECK_IEEE_RESOURCE(b_to_f16(VuV.b[4*i+2])); VddV.v[1].hf[2*i] = fCHECK_IEEE_RESOURCE(b_to_f16(VuV.b[4*i+1])); VddV.v[1].hf[2*i+1] = fCHECK_IEEE_RESOURCE(b_to_f16(VuV.b[4*i+3])); } })
+
+EXTINSN(V6_vcvt2_hf_ub,"Vdd32.hf=vcvt2(Vu32.ub)",ATTRIBS(A_EXTENSION,A_HVX_IEEE_FP,A_CVI,A_CVI_VX_DV,A_HVX_IEEE_FP_OUT_16),
+"Vector IEEE cvt2 from int: ub widen to hf",
+{ fHIDE(int i;) fVFOREACH(32, i) { VddV.v[0].hf[2*i] = fCHECK_IEEE_RESOURCE(ub_to_f16(VuV.ub[4*i])); VddV.v[0].hf[2*i+1] = fCHECK_IEEE_RESOURCE(ub_to_f16(VuV.ub[4*i+2])); VddV.v[1].hf[2*i] = fCHECK_IEEE_RESOURCE(ub_to_f16(VuV.ub[4*i+1])); VddV.v[1].hf[2*i+1] = fCHECK_IEEE_RESOURCE(ub_to_f16(VuV.ub[4*i+3])); } })
+
+Q6INSN(L6_memcpy,"memcpy(Rs32,Rt32,Mu2)",ATTRIBS(A_LOAD,A_STORE,A_MEMLIKE,A_RESTRICT_NOPACKET,A_NOTE_NOPACKET,A_VTCM_ALLBANK_ACCESS),
+"L2 Space to VTCM Memcopy",
+{ fVTCM_MEMCPY(RsV, RtV, MuV); })
+
+#ifdef __SELF_DEF_EXTINSN
+#undef EXTINSN
+#undef __SELF_DEF_EXTINSN
+#endif

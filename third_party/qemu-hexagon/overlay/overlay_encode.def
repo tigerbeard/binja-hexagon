@@ -1,0 +1,57 @@
+/*
+ *  Copyright(c) 2019-2026 Qualcomm Innovation Center, Inc. All Rights Reserved.
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, see <http://www.gnu.org/licenses/>.
+ */
+
+/*
+ * Encodings of overlay.idef's instructions, from ds_master's
+ * mmvec/encode_ext.def and encode_pp.def.
+ */
+
+#ifndef DEF_ENC32
+#define __SELF_DEF_ENC32
+#define DEF_ENC32(...) /* nothing */
+#endif
+#ifndef DEF_EXT_ENC
+#define __SELF_DEF_EXT_ENC
+#define DEF_EXT_ENC(...) /* nothing */
+#endif
+
+DEF_EXT_ENC(V6_vabs_f8,EXT_mmvec,"00011100011--110PP1uuuuu110ddddd")
+DEF_EXT_ENC(V6_vfneg_f8,EXT_mmvec,"00011100011--110PP1uuuuu111ddddd")
+DEF_EXT_ENC(V6_vfmax_f8,EXT_mmvec,"00011100011vvvvvPP1uuuuu101ddddd")
+DEF_EXT_ENC(V6_vfmin_f8,EXT_mmvec,"00011100011vvvvvPP1uuuuu100ddddd")
+DEF_EXT_ENC(V6_vadd_hf_f8,EXT_mmvec,"00011111100vvvvvPP0uuuuu100ddddd")
+DEF_EXT_ENC(V6_vsub_hf_f8,EXT_mmvec,"00011111100vvvvvPP0uuuuu101ddddd")
+DEF_EXT_ENC(V6_vmpy_hf_f8,EXT_mmvec,"00011111100vvvvvPP0uuuuu110ddddd")
+DEF_EXT_ENC(V6_vmpy_hf_f8_acc,EXT_mmvec,"00011111100vvvvvPP0uuuuu111xxxxx")
+DEF_EXT_ENC(V6_vcvt_f8_hf,EXT_mmvec,"00011111111vvvvvPP1uuuuu010ddddd")
+DEF_EXT_ENC(V6_vcvt_hf_f8,EXT_mmvec,"00011110--0--101PP1uuuuu101ddddd")
+DEF_EXT_ENC(V6_vconv_f8_qf16,EXT_mmvec,"00011110--0-1100PP1uuuuu111ddddd")
+DEF_EXT_ENC(V6_vconv_qf16_f8,EXT_mmvec,"00011110--0-1100PP1uuuuu101ddddd")
+DEF_EXT_ENC(V6_vcvt2_b_hf,EXT_mmvec,"00011010110vvvvvPP1uuuuu110ddddd")
+DEF_EXT_ENC(V6_vcvt2_ub_hf,EXT_mmvec,"00011010110vvvvvPP1uuuuu111ddddd")
+DEF_EXT_ENC(V6_vcvt2_hf_b,EXT_mmvec,"0001111011010101PP1uuuuu110ddddd")
+DEF_EXT_ENC(V6_vcvt2_hf_ub,EXT_mmvec,"0001111011010101PP1uuuuu111ddddd")
+DEF_ENC32(L6_memcpy,"10010010000sssssPPuttttt01000000")
+
+#ifdef __SELF_DEF_ENC32
+#undef __SELF_DEF_ENC32
+#undef DEF_ENC32
+#endif
+#ifdef __SELF_DEF_EXT_ENC
+#undef __SELF_DEF_EXT_ENC
+#undef DEF_EXT_ENC
+#endif

@@ -587,6 +587,41 @@ mem(R5) = L3.new }
     self.assertEqual(wrong, [])
 
 
+class TestOverlayInstructions(SnippetTest):
+  # #44: the HVX FP8 and vcvt2 instructions and memcpy, which hex-next lacks,
+  # from the overlay of Qualcomm's ds_master definitions.
+
+  def test_decodes_overlay_instructions(self):
+    f = self.analyse('''
+f:
+  { v18.f8 = vabs(v10.f8) }
+  { v13:12.hf = vadd(v12.f8,v12.f8) }
+  { v31:30.hf += vmpy(v14.f8,v12.f8) }
+  { v30.b = vcvt2(v28.hf,v20.hf) }
+  { v9:8.hf = vcvt2(v16.ub) }
+  { v10.f8 = v24.qf16 }
+  { memcpy(r18,r26,m0) }
+  { jumpr r31 }
+''')['f']
+    self.assertEqual(
+        hexasm.disasm(binja, f), '''
+{ V18.f8 = vabs(V10.f8) }
+{ V13:12.hf = vadd(V12.f8,V12.f8) }
+{ V31:30.hf += vmpy(V14.f8,V12.f8) }
+{ V30.b = vcvt2(V28.hf,V20.hf) }
+{ V9:8.hf = vcvt2(V16.ub) }
+{ V10.f8 = V24.qf16 }
+{ memcpy(R18,R26,M0) }
+{ jumpr LR }''')
+    self.assertIn('6: L6_memcpy(R18, R26, M0)', hexasm.llil(f))
+
+  def test_matches_llvm_for_overlay_encodings(self):
+    words = [w for tag, w in llvm_diff.pattern_words(
+        r'_f8($|_)|vcvt2|^L6_memcpy$')]
+    self.assertEqual(len(words), 17)
+    self.assertEqual(llvm_diff.compare(binja, words), [])
+
+
 def iset_syntax(tag, _iset={}):
   if not _iset:
     with open(llvm_diff.DEFAULT_ISET) as f:

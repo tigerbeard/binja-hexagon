@@ -41,16 +41,19 @@ work is done before it reaches QEMU): scalar instructions to V85, HVX to V81,
 the HMX matrix extension and the HLX extension, and QEMU's legacy
 (`:deprecated`) encodings. The commit is in
 [`third_party/qemu-hexagon/UPSTREAM`](/third_party/qemu-hexagon/UPSTREAM).
+The HVX FP8 and `vcvt2` instructions and `memcpy`, which that branch lacks,
+come from another of Qualcomm's branches
+([`overlay`](/third_party/qemu-hexagon/README.md)).
 Hexagon versions only add instructions, so one decoder serves code for any
 version from V5 on.
 
-Each packet is one Binary Ninja instruction. Of the 2,757 instructions:
+Each packet is one Binary Ninja instruction. Of the 2,774 instructions:
 
-*   1,546 are lifted to LLIL with their semantics. That is 86% of the 1,788
+*   1,546 are lifted to LLIL with their semantics. That is 86% of the 1,789
     scalar instructions; no HVX, HMX or HLX instruction is.
-*   1,208 are lifted as intrinsics (239 scalar, 648 HVX, 147 HMX, 174 HLX).
+*   1,225 are lifted as intrinsics (240 scalar, 664 HVX, 147 HMX, 174 HLX).
     Their general registers and data flow are right, but the operation is
-    opaque; HVX, HMX and HLX registers are not modelled. 284 of them load or
+    opaque; HVX, HMX and HLX registers are not modelled. 285 of them load or
     store memory.
 *   3 have their own lifts: `hintjumpr` is a no-op, `trap1` a system call and
     `rte` unimplemented.

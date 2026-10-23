@@ -16,29 +16,32 @@
 """The Hexagon version that introduced each instruction.
 
 Versions are numbers: 5, 55, 60 ... 85. They come from QEMU's
-tag_rev_info.c.inc, which lists the instructions added since V5. HLX
-instructions (LX_*) are not listed; they are an extension of the newest
-cores, given here as NEWEST.
+tag_rev_info.c.inc, which lists the instructions added since V5, and the
+overlay's (third_party/qemu-hexagon/overlay). HLX instructions (LX_*) are not
+listed; they are an extension of the newest cores, given here as NEWEST.
 """
 
 import functools
 import os
 import re
 
-TAG_REV_INFO = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
-                            'third_party', 'qemu-hexagon',
-                            'tag_rev_info.c.inc')
+_QEMU_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
+                         'third_party', 'qemu-hexagon')
+TAG_REV_INFO = (os.path.join(_QEMU_DIR, 'tag_rev_info.c.inc'),
+                os.path.join(_QEMU_DIR, 'overlay', 'tag_rev_info.c.inc'))
 NEWEST = 85
 LLVM_NEWEST = 81  # Homebrew LLVM 23's newest CPU, hexagonv81.
 
 
 @functools.lru_cache()
-def introduced_versions(path=TAG_REV_INFO):
-  with open(path) as f:
-    return {
-        tag: int(version) for tag, version in re.findall(
-            r'\[(\w+)\] = \{ \.introduced = HEX_VER_V(\d+)', f.read())
-    }
+def introduced_versions(paths=TAG_REV_INFO):
+  versions = {}
+  for path in paths:
+    with open(path) as f:
+      versions.update(
+          (tag, int(version)) for tag, version in re.findall(
+              r'\[(\w+)\] = \{ \.introduced = HEX_VER_V(\d+)', f.read()))
+  return versions
 
 
 def introduced(tag):

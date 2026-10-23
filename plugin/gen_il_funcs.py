@@ -982,9 +982,10 @@ class IlTernary(IlExprId):
 
 
 def find_ternary(expr):
-  """The first IlTernary in |expr|, or None."""
+  """The first IlTernary in |expr| whose condition has none, or None."""
   if isinstance(expr, IlTernary):
-    return expr
+    inner = find_ternary(expr.cond)
+    return expr if inner is None else inner
   if isinstance(expr, (list, tuple)):
     children = expr
   elif isinstance(expr, IlExprId):
@@ -1609,6 +1610,26 @@ class SemanticsTreeTransformer(Transformer):
   def macro_stmt_fSETBIT(self, args):
     return self.set_lane(args, 1)
 
+  def macro_stmt_fSETBITS(self, args):
+    # macros.h:
+    # #define fSETBITS(HI, LO, DST, VAL) for (j = LO; j <= HI; j++)
+    #                                      fSETBIT(j, DST, VAL)
+    # as DST = (DST & ~MASK) | (-(VAL & 1) & MASK), MASK bits LO to HI.
+    assert (len(args) == 4)
+    hi, lo = fold_constant(args[0]), fold_constant(args[1])
+    assert (hi is not None and lo is not None)
+    dst, val = list(map(self.lift_operand, args[2:]))
+    assert (isinstance(dst, IlRegister))
+    size = dst.size
+    if isinstance(val, IlCompareExpr):
+      bit = IlBoolToInt(size, val)
+    else:
+      bit = IlAnd(size, convert(val, size, False), IlConst(size, 1))
+    mask = ((1 << (hi - lo + 1)) - 1) << lo
+    old = IlAnd(size, dst, IlConst(size, ~mask & ((1 << (8 * size)) - 1)))
+    new = IlAnd(size, IlNeg(size, bit), IlConst(size, mask))
+    return [IlSetRegister(size, dst.reg, IlOr(size, old, new))]
+
   def macro_stmt_fSETBYTE(self, args):
     return self.set_lane(args, 8)
 
@@ -1842,10 +1863,22 @@ class SemanticsTreeTransformer(Transformer):
     assert (len(args) == 1)
     val = self.lift_operand(args[0])
     assert (val.size <= 8)
-    if val.size == 8:
-      val.signed = True
+    if val.size == 8 or literal_fits(val, 8, True):
+      # A literal is a constant of the cast's size (0x8000000000000000ULL).
+      val = copy.copy(val)
+      val.size, val.signed = 8, True
       return val
     return IlSignExtend(8, val)
+
+  def macro_expr_fCAST2_8s(self, args):
+    # #define fCAST2_8s(A) ((int64_t)((int16_t)(A)))
+    assert (len(args) == 1)
+    return convert(convert(self.lift_operand(args[0]), 2, True), 8, True)
+
+  def macro_expr_fCAST2_8u(self, args):
+    # #define fCAST2_8u(A) ((uint64_t)((uint16_t)(A)))
+    assert (len(args) == 1)
+    return convert(convert(self.lift_operand(args[0]), 2, False), 8, False)
 
   def macro_expr_fCAST8u(self, args):
     # macros.h:
@@ -1853,8 +1886,10 @@ class SemanticsTreeTransformer(Transformer):
     assert (len(args) == 1)
     val = self.lift_operand(args[0])
     assert (val.size <= 8)
-    if val.size == 8:
-      val.signed = False
+    if val.size == 8 or literal_fits(val, 8, False):
+      # A literal is a constant of the cast's size (0x8000000000000000ULL).
+      val = copy.copy(val)
+      val.size, val.signed = 8, False
       return val
     return IlZeroExtend(8, val)
 
@@ -1928,9 +1963,7 @@ class SemanticsTreeTransformer(Transformer):
     # operation - a boolean value.
     assert (len(args) == 1)
     val = self.lift_operand(args[0])
-    is_bool = isinstance(val, IlCompareExpr)
-    is_bool = is_bool or (isinstance(val, IlAnd) and val.b == IlConst(4, 1))
-    assert (is_bool)
+    assert (is_boolean(val))
     return val
 
   def macro_expr_fLSBOLD(self, args):
@@ -1941,6 +1974,8 @@ class SemanticsTreeTransformer(Transformer):
     assert (len(args) == 1)
     val = self.lift_operand(args[0])
     assert (isinstance(val, IlRegister) and val.reg.startswith('P'))
+    # Used as a number (add(Rss,Rtt,Px):carry), it is the low bit.
+    val.low_bit = True
     return val
 
   def macro_expr_fNEWREG_ST(self, args):
@@ -1980,7 +2015,11 @@ class SemanticsTreeTransformer(Transformer):
     # int max = (a >= b) * a + (a < b) * b;
     assert (len(args) == 2)
     a, b = list(map(self.lift_operand, args))
-    assert (a.size == b.size)
+    if a.size != b.size or a.signed != b.signed:
+      # The usual arithmetic conversions, as C's operators.
+      signed = a.signed and b.signed
+      a, b = promote(a, b)
+      a.signed = b.signed = signed
     size = a.size
     if a.signed:
       return IlAdd(
@@ -2005,7 +2044,11 @@ class SemanticsTreeTransformer(Transformer):
     # int min = (a <= b) * a + (a > b) * b;
     assert (len(args) == 2)
     a, b = list(map(self.lift_operand, args))
-    assert (a.size == b.size)
+    if a.size != b.size or a.signed != b.signed:
+      # The usual arithmetic conversions, as C's operators.
+      signed = a.signed and b.signed
+      a, b = promote(a, b)
+      a.signed = b.signed = signed
     size = a.size
     if a.signed:
       return IlAdd(
@@ -2190,12 +2233,13 @@ class SemanticsTreeTransformer(Transformer):
           IlSetRegister(lvalue.size, lvalue.reg,
                         convert(rvalue, lvalue.size, lvalue.signed))
       ]
-    if (lvalue.reg in TEMP_REGS and rvalue.size < lvalue.size and
-        not isinstance(rvalue, IlConst)):
+    if lvalue.reg in TEMP_REGS and rvalue.size < lvalue.size:
       # The semantics' temporaries are 8-byte temps (their declared types are
       # hidden), so a narrower value is extended as its type says. Immediates
-      # are already C++ ints of the right sign.
-      if rvalue.signed:
+      # are C++ ints of the right sign, which a wider constant extends.
+      if isinstance(rvalue, IlConst):
+        rvalue = widen(rvalue, lvalue.size)
+      elif rvalue.signed:
         rvalue = IlSignExtend(lvalue.size, rvalue)
       else:
         rvalue = IlZeroExtend(lvalue.size, rvalue)
@@ -2240,6 +2284,7 @@ class SemanticsTreeTransformer(Transformer):
     op1, op2 = list(map(self.lift_operand, [op1, op2]))
     if op1.is_float or op2.is_float:
       return float_binop(op1, binop.value, op2)
+    op1, op2 = low_bit(op1), low_bit(op2)
     if binop.value in ('<<', '>>'):
       # A shift has its (promoted) left operand's type.
       op1 = int_promote(op1)
@@ -2336,7 +2381,12 @@ class SemanticsTreeTransformer(Transformer):
   # | logand_e LOGAND bitor_e -> expr_logop
   @v_args(inline=True)
   def expr_logop(self, op1, logop, op2):
-    raise ValueError('Logical operators are not lifted')
+    # a && b is a ? b : 0, and a || b is a ? 1 : b, on booleans, so b is not
+    # evaluated when a decides.
+    a, b = [boolean(self.lift_operand(op)) for op in (op1, op2)]
+    if logop.value == '&&':
+      return IlTernary(a, b, IlConst(1, 0))
+    return IlTernary(a, IlConst(1, 1), b)
 
   # | "(" CTYPE ")" unary_e -> cast_expr
   @v_args(inline=True)
@@ -2369,6 +2419,30 @@ def float_binop(op1, op, op2):
           op in FLOAT_BINOPS):
     raise ValueError('Unsupported float operation: {}'.format(op))
   return FLOAT_BINOPS[op](op1.size, op1, op2)
+
+
+def low_bit(expr):
+  """A predicate's fLSBOLD as a number: P & 1."""
+  if getattr(expr, 'low_bit', False):
+    return IlAnd(expr.size, expr, IlConst(expr.size, 1))
+  return expr
+
+
+def is_boolean(expr):
+  """Whether |expr| is 0 or 1: a comparison, a bit (x & 1), one of those
+  literals, or a logical operator's ternary of them."""
+  if isinstance(expr, IlTernary):
+    return is_boolean(expr.t) and is_boolean(expr.f)
+  return (isinstance(expr, IlCompareExpr) or
+          (isinstance(expr, IlAnd) and expr.b == IlConst(4, 1)) or
+          (isinstance(expr, IlConst) and expr.val in (0, 1, '0', '1')))
+
+
+def boolean(expr):
+  """|expr| as a boolean, as C's logical operators take their operands."""
+  if is_boolean(expr):
+    return expr
+  return IlCompareNotEqual(expr.size, expr, IlConst(expr.size, 0))
 
 
 def widen(expr, size):
@@ -2637,7 +2711,7 @@ def genptr_decl_opn(tag, regtype, regid, toss, numregs, i):
 def zero_partial_dest(tag, regtype, regid):
   """Zeroes a write-only destination that the instruction builds in parts.
 
-  fSETWORD, fSETHALF, fSETBYTE and fSETBIT lift as read-modify-writes of the
+  fSETWORD, fSETHALF, fSETBYTE, fSETBIT and fSETBITS lift as read-modify-writes of the
   destination's temp. A write-only temp starts uninitialised, and Binary Ninja
   cannot fold `(uninitialised & mask) | part` away even when every part is
   written (combine, bitsplit, swiz, vector compares into a predicate).
@@ -2646,9 +2720,10 @@ def zero_partial_dest(tag, regtype, regid):
       regtype not in 'RCP'):
     return []
   var = '{}{}V'.format(regtype, regid)
-  if not re.search(
+  if not (re.search(
       r'fSET(WORD|HALF|BYTE|BIT)\(\s*[^,]+\s*,\s*{}\b'.format(var),
-      semdict[tag]):
+      semdict[tag]) or re.search(
+          r'fSETBITS\(\s*[^,]+,\s*[^,]+,\s*{}\b'.format(var), semdict[tag])):
     return []
   size = 1 if regtype == 'P' else 8 if is_pair(regid) else 4
   return [
@@ -2700,7 +2775,8 @@ def local_declarations(sem):
   `fHIDE(int i; size8u_t x;)` or `fHIDE(size4s_t) shamt`. fHIDE also hides
   code, which is not a declaration and is left alone."""
   decls = {}
-  for m in re.finditer(r'fHIDE\(\s*([^()]*?)\s*\)\s*(\w*)', sem):
+  # The following word is only looked at: it may be the next fHIDE.
+  for m in re.finditer(r'fHIDE\(\s*([^()]*?)\s*\)\s*(?=(\w*))', sem):
     body, following = m.group(1), m.group(2)
     if c_type(body) and following:
       decls[following] = c_type(body)
@@ -2762,6 +2838,19 @@ def unroll_loops(text):
     text = text[:m.start()] + '{' + copies + '}' + text[k + 1:]
 
 
+LITERAL_SUFFIX_CASTS = {'ULL': 'fCAST8u', 'UL': 'fCAST8u', 'LL': 'fCAST8s',
+                        'L': 'fCAST8s', 'U': 'fCAST4u'}
+
+
+def type_literals(text):
+  """Gives C literals with a suffix (0x80000000ULL, 1LL) their type, as a
+  cast: the grammar's literals are ints."""
+  return re.sub(
+      r'\b(0[xX][0-9a-fA-F]+|\d+)([uU]?[lL]{0,2})\b', lambda m: '{}({})'.format(
+          LITERAL_SUFFIX_CASTS[m.group(2).upper()], m.group(1))
+      if m.group(2) else m.group(0), text)
+
+
 def assign_locals(tag, decls, parts):
   """Gives the local variables used in |parts| temps by size, and renames
   them local_NAME for the grammar."""
@@ -2790,6 +2879,10 @@ def preprocess_semantics(tag):
   sem = semdict[tag]
   decls = local_declarations(sem)
   sem = initialise_declarations(sem)
+  # fHIDE((size8u_t)) X is a cast, which fHIDE(A) would remove.
+  sem = re.sub(r'fHIDE\(\s*\(([^()]+)\)\s*\)',
+               lambda m: '({})'.format(m.group(1))
+               if c_type(m.group(1)) else m.group(0), sem)
 
   cpreprocessor = Preprocessor()
 
@@ -2866,6 +2959,20 @@ def preprocess_semantics(tag):
       'fBIDIR_SHIFTR(SRC, SHAMT, REGSTYPE) (((SHAMT) < 0) ? '
       '((fCAST##REGSTYPE(SRC) << ((-(SHAMT)) - 1)) << 1) : '
       '(fCAST##REGSTYPE(SRC) >> (SHAMT)))')
+  # Saturating shifts by a register amount, as QEMU's macros.h.
+  cpreprocessor.define(
+      'fSAT_ORIG_SHL(A, ORIG_REG) ((((size4s_t)((fSAT(A)) ^ '
+      '((size4s_t)(ORIG_REG)))) < 0) ? fSATVALN(32, ((size4s_t)(ORIG_REG))) : '
+      '((((ORIG_REG) > 0) && ((A) == 0)) ? fSATVALN(32, (ORIG_REG)) : '
+      'fSAT(A)))')
+  cpreprocessor.define(
+      'fBIDIR_ASHIFTL_SAT(SRC, SHAMT, REGSTYPE) (((SHAMT) < 0) ? '
+      '((fCAST##REGSTYPE##s(SRC) >> ((-(SHAMT)) - 1)) >> 1) : '
+      'fSAT_ORIG_SHL(fCAST##REGSTYPE##s(SRC) << (SHAMT), (SRC)))')
+  cpreprocessor.define(
+      'fBIDIR_ASHIFTR_SAT(SRC, SHAMT, REGSTYPE) (((SHAMT) < 0) ? '
+      'fSAT_ORIG_SHL((fCAST##REGSTYPE##s(SRC) << ((-(SHAMT)) - 1)) << 1, '
+      '(SRC)) : (fCAST##REGSTYPE##s(SRC) >> (SHAMT)))')
   cpreprocessor.define('fBIDIR_ASHIFTL(SRC, SHAMT, REGSTYPE) '
                        'fBIDIR_SHIFTL(SRC, SHAMT, REGSTYPE##s)')
   cpreprocessor.define('fBIDIR_LSHIFTL(SRC, SHAMT, REGSTYPE) '
@@ -2914,6 +3021,39 @@ def preprocess_semantics(tag):
   cpreprocessor.define('fSATUH(VAL) fSATUN(16, VAL)')
   cpreprocessor.define('fSATB(VAL) fSATN(8, VAL)')
   cpreprocessor.define('fSATUB(VAL) fSATUN(8, VAL)')
+  # 64-bit saturating add: the sum, unless the operands have one sign and the
+  # sum the other.
+  cpreprocessor.define(
+      'fADDSAT64(DST, A, B) { DST = ((((~(fCAST8u(A) ^ fCAST8u(B))) & '
+      '(fCAST8u(A) ^ (fCAST8u(A) + fCAST8u(B)))) >> 63) != 0) ? '
+      '((((fCAST8u(A) + fCAST8u(B)) >> 63) != 0) ? '
+      'fCAST8u(0x7fffffffffffffff) : fCAST8u(0x8000000000000000)) : '
+      '(fCAST8u(A) + fCAST8u(B)); }')
+  # Rounding, as QEMU's macros.h; fCRNDN is its conv_round(), which rounds
+  # to even.
+  cpreprocessor.define(
+      'fRNDN(A, N) (((N) == 0) ? fSE32_64(A) : '
+      '(fSE32_64(A) + (1 << ((N) - 1))))')
+  cpreprocessor.define('fCRND(A) ((((A) & 0x3) == 0x3) ? ((A) + 1) : (A))')
+  cpreprocessor.define(
+      'fCRNDN(A, N) (((N) == 0) ? fSE32_64(A) : '
+      '((((A) & ((1 << ((N) - 1)) - 1)) == 0) ? '
+      '((fSE32_64(A) + (fCAST4u((1 << (N)) & (A)) >> 1)) >> (N)) : '
+      '((fSE32_64(A) + (1 << ((N) - 1))) >> (N))))')
+  cpreprocessor.define(
+      'fCLIP(DST, SRC, U) { DST = fMIN((1 << (U)) - 1, fMAX(SRC, -(1 << (U)))); }')
+  # The carry out of A + B + C, from the operands' and the sum's top bits.
+  cpreprocessor.define(
+      'fCARRY_FROM_ADD(A, B, C) ((((fCAST8u(A) & fCAST8u(B)) | '
+      '((fCAST8u(A) | fCAST8u(B)) & ~(fCAST8u(A) + fCAST8u(B) + (C)))) '
+      '>> 63) != 0)')
+  cpreprocessor.define(
+      'fEXTRACTU_BIDIR(INREG, WIDTH, OFFSET) '
+      '(fZXTN(WIDTH, 32, fBIDIR_LSHIFTR((INREG), (OFFSET), 4_8)))')
+  cpreprocessor.define(
+      'fINSERT_BITS(REG, WIDTH, OFFSET, INVAL) { REG = ((WIDTH) != 0) ? '
+      '((REG & ~(((1 << (WIDTH)) - 1) << (OFFSET))) | '
+      '((INVAL & ((1 << (WIDTH)) - 1)) << (OFFSET))) : REG; }')
   cpreprocessor.define(
       'fMPY3216SS(A, B) (fSE32_64(A) * fSXTN(16, 64, B))')
   cpreprocessor.define(
@@ -2961,7 +3101,8 @@ def preprocess_semantics(tag):
   clean = ''.join([tok.value for tok in cpreprocessor.parsegen(sem)])
   clean = ''.join([tok.value for tok in cpreprocessor.parsegen(clean)])
   parts.append(clean)
-  return assign_locals(tag, decls, [unroll_loops(part) for part in parts])
+  return assign_locals(tag, decls,
+                       [type_literals(unroll_loops(part)) for part in parts])
 
 
 def genptr_decl_fixed_pred(parts):

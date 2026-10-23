@@ -23,7 +23,7 @@
 #include "third_party/qemu-hexagon/insn.h"
 #include "third_party/qemu-hexagon/opcodes.h"
 
-#include "glog/logging.h"
+#include <cassert>
 
 namespace {
 
@@ -51,8 +51,8 @@ int MapRegNum(char regtype, int regno) {
     return HEX_REG_P0 + regno;
   }
   // The generated lifters only map these register types.
-  LOG(ERROR) << "Unknown regtype " << static_cast<int>(regtype);
-  DCHECK(false);
+  LogError("Unknown regtype %d", static_cast<int>(regtype));
+  assert(false);
   return -1;
 }
 
@@ -63,7 +63,7 @@ void TempReg::CopyToTemp(BinaryNinja::LowLevelILFunction &il) {
   } else if (size_ == 4) {
     expr = il.SetRegister(4, Reg(), il.Register(4, reg_));
   } else {
-    DCHECK_EQ(size_, 8);
+    assert(size_ == 8);
     expr = il.SetRegister(8, Reg(), il.RegisterSplit(4, reg_ + 1, reg_));
   }
   il.AddInstruction(expr);
@@ -76,7 +76,7 @@ void TempReg::CopyFromTemp(BinaryNinja::LowLevelILFunction &il) {
   } else if (size_ == 4) {
     expr = il.SetRegister(4, reg_, il.Register(4, Reg()));
   } else {
-    DCHECK_EQ(size_, 8);
+    assert(size_ == 8);
     expr = il.SetRegisterSplit(4, reg_ + 1, reg_, il.Register(8, Reg()));
   }
   il.AddInstruction(expr);
@@ -100,11 +100,11 @@ int PacketContext::AddDestReadWriteReg(int reg) {
   return AddDestReg(true, 4, reg);
 }
 int PacketContext::AddDestWriteOnlyPredReg(int reg) {
-  DCHECK(reg >= HEX_REG_P0 && reg <= HEX_REG_P3);
+  assert(reg >= HEX_REG_P0 && reg <= HEX_REG_P3);
   return AddDestReg(false, 1, reg);
 }
 int PacketContext::AddDestReadWritePredReg(int reg) {
-  DCHECK(reg >= HEX_REG_P0 && reg <= HEX_REG_P3);
+  assert(reg >= HEX_REG_P0 && reg <= HEX_REG_P3);
   return AddDestReg(true, 1, reg);
 }
 

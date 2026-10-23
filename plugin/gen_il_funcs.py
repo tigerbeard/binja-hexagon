@@ -2366,7 +2366,6 @@ def main():
 #include "plugin/packet_context.h"
 #include "plugin/hex_regs.h"
 #include "plugin/intrinsics.h"
-#include "glog/logging.h"
 
 using namespace BinaryNinja;
 

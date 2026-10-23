@@ -276,5 +276,28 @@ f:
     self.assertIn('R1:R0 = {}.q'.format(copy_in.group(1)), il)
 
 
+class TestUnnamedRegisters(SnippetTest):
+
+  def test_unnamed_system_registers_do_not_abort(self):
+    # #4: naming S12-S15, S19 or S86-S127 called LOG(FATAL) and aborted
+    # Binary Ninja. llvm-mc does not assemble these, so they are .words:
+    # Y2_tfrscrr (Rd = Ss) and Y4_tfrscpp (Rdd = Sss), parse bits 11.
+    f = self.analyse('''
+f:
+  .word 0x6e8cc000
+  .word 0x6e93c000
+  .word 0x6effc000
+  .word 0x6f56c000
+  { jumpr r31 }
+''')['f']
+    self.assertEqual(
+        hexasm.disasm(binja, f), '''
+{ R0 = S12 }
+{ R0 = S19 }
+{ R0 = S127 }
+{ R1:0 = S87:86 }
+{ jumpr LR }''')
+
+
 if __name__ == '__main__':
   unittest.main()

@@ -216,7 +216,10 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch, uint64_t pc,
           il.AddInstruction(
               il.Jump(il.ConstPointer(4, pc + insn.immed[0])));
         } else {
-          CHECK(IsCall(insn));
+          if (!IsCall(insn)) {
+            return absl::InternalError(
+                StrCat("Unexpected branch opcode ", insn.opcode));
+          }
           il.AddInstruction(
               il.Call(il.ConstPointer(4, pc + insn.immed[0])));
           // Skip other branches in the packet, and go to the next neighboring

@@ -21,6 +21,7 @@ removes the marker.
 """
 
 import os
+import random
 import re
 import sys
 import unittest
@@ -1245,6 +1246,24 @@ f:
     self.assertNotIn('A7_clip', il)
 
 
+class TestWideArithmetic(SnippetTest):
+  # #48: QEMU's 128-bit helpers lift as 16-byte IL, which Binary Ninja shows
+  # as int128_t: the complex multiplies of words and convergent rounding of
+  # pairs.
+
+  def test_lifts_128_bit_arithmetic(self):
+    f = self.analyse('''
+f:
+  { r0 = cmpyrw(r3:2, r5:4):<<1:sat }
+  { r7:6 = cround(r3:2, #5) }
+  { jumpr r31 }
+''')['f']
+    il = hexasm.llil(f)
+    self.assertIn('temp#3.o = temp#2.o - temp#3.o', il)
+    self.assertIn('temp#3.o = temp#3.o s>> 0x1f', il)
+    self.assertIn('int128_t', hexasm.hlil(f))
+
+
 class TestQemuCases(SnippetTest):
   # The cases qemu_diff.py runs: only instructions QEMU's CPU has, and no
   # words that write one register twice (undefined; QEMU 11.1 keeps the
@@ -1295,6 +1314,28 @@ class TestAgainstQemu(SnippetTest):
     problems = qemu_diff.compare(binja, qemu_diff.cases_for(tags, iset, 4))
     self.assertEqual(
         {tag: texts[0] for tag, texts in problems.items()}, {})
+
+  def test_complex_multiplies_at_their_extremes(self):
+    # Sums of two products of -2^31 overflow 64 bits.
+    import qemu_diff
+    namespace = {}
+    with open(llvm_diff.DEFAULT_ISET) as f:
+      exec(f.read(), namespace)
+    iset = namespace['iset']
+    rng = random.Random(5)
+    cases = []
+    for tag in sorted(t for t in iset if t.startswith('M7_wcmpy')):
+      for words in ((0x80000000,) * 4, (0x80000000, 0x7fffffff) * 2):
+        word = qemu_diff.random_word(iset[tag], rng)
+        while qemu_diff.writes_a_register_twice(iset[tag], word):
+          word = qemu_diff.random_word(iset[tag], rng)
+        regs = qemu_diff.random_regs(rng)
+        s = qemu_diff.field(iset[tag], word, 's')
+        t = qemu_diff.field(iset[tag], word, 't')
+        for reg, value in zip((s, s + 1, t, t + 1), words):
+          regs['r%d' % reg] = value
+        cases.append((tag, word, regs, []))
+    self.assertEqual(qemu_diff.compare(binja, cases), {})
 
 
 if __name__ == '__main__':

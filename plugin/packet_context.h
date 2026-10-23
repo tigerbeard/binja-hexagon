@@ -64,16 +64,18 @@ constexpr int kBranchTakenBase = kBranchDestBase + INSTRUCTIONS_MAX;
 #define BRANCH_TAKEN_ARRAY LLIL_TEMP(kBranchTakenBase)
 
 // Local variables of the generated lifters (declared in fHIDE), by size:
-// LOCAL1_REG + k is the k-th one-byte local, and so on for 2, 4 and 8 bytes.
+// LOCAL1_REG + k is the k-th one-byte local, and so on for 2, 4, 8 and 16
+// bytes (the 128-bit values of cmpyrw and cround).
 constexpr int kLocalTempBase = kBranchTakenBase + INSTRUCTIONS_MAX;
 constexpr int kLocalTempsPerSize = 8;
 #define LOCAL1_REG LLIL_TEMP(kLocalTempBase + 0 * kLocalTempsPerSize)
 #define LOCAL2_REG LLIL_TEMP(kLocalTempBase + 1 * kLocalTempsPerSize)
 #define LOCAL4_REG LLIL_TEMP(kLocalTempBase + 2 * kLocalTempsPerSize)
 #define LOCAL8_REG LLIL_TEMP(kLocalTempBase + 3 * kLocalTempsPerSize)
+#define LOCAL16_REG LLIL_TEMP(kLocalTempBase + 4 * kLocalTempsPerSize)
 
 // Scratch values of circular addressing (fcircadd): CIRC_REG + 0 to 4.
-constexpr int kCircTempBase = kLocalTempBase + 4 * kLocalTempsPerSize;
+constexpr int kCircTempBase = kLocalTempBase + 5 * kLocalTempsPerSize;
 #define CIRC_REG LLIL_TEMP(kCircTempBase)
 constexpr int kNumCircTemps = 5;
 

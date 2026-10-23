@@ -1862,13 +1862,19 @@ class SemanticsTreeTransformer(Transformer):
     # #define fCAST8s(A) ((int64_t)(A))
     assert (len(args) == 1)
     val = self.lift_operand(args[0])
-    assert (val.size <= 8)
+    if val.size > 8:
+      return convert(val, 8, True)  # The low half of a 128-bit value.
     if val.size == 8 or literal_fits(val, 8, True):
       # A literal is a constant of the cast's size (0x8000000000000000ULL).
       val = copy.copy(val)
       val.size, val.signed = 8, True
       return val
     return IlSignExtend(8, val)
+
+  def macro_expr_fCAST16s(self, args):
+    # A 128-bit signed integer (size16s_t), for fCAST8S_16S.
+    assert (len(args) == 1)
+    return convert(self.lift_operand(args[0]), 16, True)
 
   def macro_expr_fCAST2_8s(self, args):
     # #define fCAST2_8s(A) ((int64_t)((int16_t)(A)))
@@ -1885,7 +1891,8 @@ class SemanticsTreeTransformer(Transformer):
     # #define fCAST8u(A) ((uint64_t)(A))
     assert (len(args) == 1)
     val = self.lift_operand(args[0])
-    assert (val.size <= 8)
+    if val.size > 8:
+      return convert(val, 8, False)  # The low half of a 128-bit value.
     if val.size == 8 or literal_fits(val, 8, False):
       # A literal is a constant of the cast's size (0x8000000000000000ULL).
       val = copy.copy(val)
@@ -2752,7 +2759,7 @@ C_TYPES = {
     'long long': (8, True),
     'unsigned long long': (8, False),
 }
-for _bytes in (1, 2, 4, 8):
+for _bytes in (1, 2, 4, 8, 16):
   C_TYPES['size{}s_t'.format(_bytes)] = (_bytes, True)
   C_TYPES['size{}u_t'.format(_bytes)] = (_bytes, False)
   C_TYPES['int{}_t'.format(8 * _bytes)] = (_bytes, True)
@@ -3062,6 +3069,14 @@ def preprocess_semantics(tag):
       'fINSERT_BITS(REG, WIDTH, OFFSET, INVAL) { REG = ((WIDTH) != 0) ? '
       '((REG & ~(((1 << (WIDTH)) - 1) << (OFFSET))) | '
       '((INVAL & ((1 << (WIDTH)) - 1)) << (OFFSET))) : REG; }')
+  # QEMU's 128-bit helpers (cmpyrw, cround), as 16-byte IL.
+  cpreprocessor.define('fCAST8S_16S(A) fCAST16s(fCAST8s(A))')
+  cpreprocessor.define('fCAST16S_8S(A) fCAST8s(A)')
+  cpreprocessor.define('fADD128(A, B) ((A) + (B))')
+  cpreprocessor.define('fSUB128(A, B) ((A) - (B))')
+  cpreprocessor.define('fAND128(A, B) ((A) & (B))')
+  cpreprocessor.define('fSHIFTL128(A, B) ((A) << (B))')
+  cpreprocessor.define('fSHIFTR128(A, B) ((A) >> (B))')
   cpreprocessor.define(
       'fMPY3216SS(A, B) (fSE32_64(A) * fSXTN(16, 64, B))')
   cpreprocessor.define(

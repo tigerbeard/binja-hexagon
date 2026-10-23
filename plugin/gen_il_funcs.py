@@ -2879,6 +2879,14 @@ def preprocess_semantics(tag):
   sem = semdict[tag]
   decls = local_declarations(sem)
   sem = initialise_declarations(sem)
+  # fATOMIC_LDST(SIZE, DST, EA, SRC, OP, NEW) loads DST from EA and stores
+  # NEW, in which *EA is the loaded value: a load and a store, as Binary Ninja
+  # lifts other architectures' atomic read-modify-writes. :aq and :rl
+  # ordering is not lifted.
+  sem = re.sub(
+      r'fATOMIC_LDST\((\d+),\s*(\w+),\s*EA,\s*\w+,\s*\d+,\s*(.+?)\);',
+      lambda m: '{{ fLOAD(1, {0}, u, EA, {1}); fSTORE(1, {0}, EA, {2}); }}'.format(
+          m.group(1), m.group(2), m.group(3).replace('*EA', m.group(2))), sem)
   # fHIDE((size8u_t)) X is a cast, which fHIDE(A) would remove.
   sem = re.sub(r'fHIDE\(\s*\(([^()]+)\)\s*\)',
                lambda m: '({})'.format(m.group(1))

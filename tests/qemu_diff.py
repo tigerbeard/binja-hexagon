@@ -80,9 +80,11 @@ MEMORY_ATTRIBS = {'A_LOAD', 'A_STORE', 'A_MEMLIKE', 'A_MEMLIKE_PACKET_RULES'}
 # The data window for loads and stores.
 DATA_BASE = 0x100000
 DATA_SIZE = 0x80000
-# A memory operand: mem*(Rs32+...), mem*(Rx32++...) or mem*(gp+...), and
+# A memory operand: mem*(Rs32+...), mem*(Rx32++...), mem*(gp+...) or an
+# atomic's atom*(Rs32,...), and
 # the index register of mem*(Rs32+Ru32<<#u2).
-_MEMORY_OPERAND = re.compile(r'mem\w*\((?:(R[a-z]{1,2})32|gp)(?:\+\+|\+|\))')
+_MEMORY_OPERAND = re.compile(
+    r'(?:mem\w*|atom[wd]_\w+)\((?:(R[a-z]{1,2})32|gp)(?:\+\+|\+|\)|,)')
 _INDEX = re.compile(r'\+\s*R([a-z])32\s*<<')
 
 QEMU_TO_BN = dict({'r%d' % i: 'R%d' % i for i in range(29)},

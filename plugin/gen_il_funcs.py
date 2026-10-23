@@ -1951,14 +1951,38 @@ def genptr_decl_new(regtype, regid, regno):
 
 def genptr_decl_opn(tag, regtype, regid, toss, numregs, i):
   if (is_pair(regid)):
-    return genptr_decl(tag, regtype, regid, i)
+    return genptr_decl(tag, regtype, regid, i) + zero_partial_dest(
+        tag, regtype, regid)
 
   assert (is_single(regid))
   if is_old_val(regtype, regid, tag):
-    return genptr_decl(tag, regtype, regid, i)
+    return genptr_decl(tag, regtype, regid, i) + zero_partial_dest(
+        tag, regtype, regid)
 
   assert (is_new_val(regtype, regid, tag))
   return genptr_decl_new(regtype, regid, i)
+
+
+def zero_partial_dest(tag, regtype, regid):
+  """Zeroes a write-only destination that the instruction builds in parts.
+
+  fSETWORD, fSETHALF and fSETBYTE lift as read-modify-writes of the
+  destination's temp. A write-only temp starts uninitialised, and Binary Ninja
+  cannot fold `(uninitialised & mask) | part` away even when every part is
+  written (combine, bitsplit, swiz).
+  """
+  if (not is_writeonly(regid) or 'A_CONDEXEC' in attribdict[tag] or
+      regtype not in 'RC'):
+    return []
+  var = '{}{}V'.format(regtype, regid)
+  if not re.search(r'fSET(WORD|HALF|BYTE)\(\s*\w+\s*,\s*{}\b'.format(var),
+                   semdict[tag]):
+    return []
+  size = 8 if is_pair(regid) else 4
+  return [
+      RawC('''il.AddInstruction(il.SetRegister({0}, {1}, il.Const({0}, 0)));'''
+           .format(size, var))
+  ]
 
 
 def genptr_decl_imm(immlett):

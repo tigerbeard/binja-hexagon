@@ -662,5 +662,21 @@ f:
     self.assertNotRegex(il, r'(LR|FP) = sx\.q')
 
 
+class TestPartialWrites(SnippetTest):
+  # #31: combine and other instructions that build a write-only destination
+  # in parts read its uninitialised temp, which HLIL kept as a variable.
+
+  def test_combine_has_no_uninitialised_temp(self):
+    f = self.analyse('''
+f:
+  { r17:16 = combine(r1, r0) }
+  { r0 = add(r16, r17) }
+  { jumpr r31 }
+''')['f']
+    hlil = hexasm.hlil(f)
+    self.assertNotIn('temp#', hlil)
+    self.assertNotIn('0xffffffff00000000', hlil)
+
+
 if __name__ == '__main__':
   unittest.main()

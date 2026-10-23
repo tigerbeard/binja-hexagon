@@ -448,5 +448,37 @@ f:
     self.assertIn('(int32_t arg1, int32_t arg2 @ R6)', str(f.type))
 
 
+class TestReturns(SnippetTest):
+  # #6: `jumpr r31` reported IndirectBranch, and conditional `jumpr r31`
+  # lifted as an indirect jump through a temp.
+
+  def test_jumpr_lr_is_a_function_return(self):
+    arch = binja.Architecture['hexagon']
+    word = hexasm.assemble('f:\n  { jumpr r31 }').code
+    info = arch.get_instruction_info(word, 0)
+    self.assertEqual([b.type for b in info.branches],
+                     [binja.BranchType.FunctionReturn])
+
+  def test_conditional_returns(self):
+    funcs = self.analyse('''
+old_predicate:
+  { p0 = cmp.eq(r0, #0); r0 = #7 }
+  { if (p0) jumpr r31 }
+  { r0 = #1 }
+  { jumpr r31 }
+new_predicate:
+  { p0 = cmp.gt(r0, #5); if (p0.new) jumpr:nt r31 }
+  { r0 = add(r0, #1) }
+  { jumpr r31 }
+''')
+    for f in funcs.values():
+      il = hexasm.llil(f)
+      self.assertEqual(il.count('<return> jump(LR)'), 2, il)
+      self.assertNotRegex(il, r'jump\(temp')
+    hlil = hexasm.hlil(funcs['old_predicate'])
+    self.assertIn('return 7', hlil)
+    self.assertIn('return 1', hlil)
+
+
 if __name__ == '__main__':
   unittest.main()

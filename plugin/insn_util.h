@@ -41,5 +41,6 @@ bool IsJump(const Insn &insn);
 bool IsCall(const Insn &insn);
 bool IsIndirect(const Insn &insn);
 bool IsCondJump(const Insn &insn);
+// A return: dealloc_return and its forms, or `jumpr r31`, conditional or not.
 bool IsReturn(const Insn &insn);
 bool IsSystem(const Insn &insn);

@@ -24,28 +24,28 @@ set(SHORTCODE_H      ${CMAKE_CURRENT_BINARY_DIR}/shortcode_generated.h)
 
 add_custom_command(
   OUTPUT ${OPCODES_DEF_H}
-  COMMAND python3 gen_opcodes_def.py ${SEMANTICS} attribs_def.h ${OPCODES_DEF_H}
+  COMMAND ${Python3_EXECUTABLE} gen_opcodes_def.py ${SEMANTICS} attribs_def.h ${OPCODES_DEF_H}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   DEPENDS hex_common.py gen_opcodes_def.py ${SEMANTICS} attribs_def.h
 )
 
 add_custom_command(
   OUTPUT ${OP_REGS_H}
-  COMMAND python3 gen_op_regs.py ${SEMANTICS} attribs_def.h ${OP_REGS_H}
+  COMMAND ${Python3_EXECUTABLE} gen_op_regs.py ${SEMANTICS} attribs_def.h ${OP_REGS_H}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   DEPENDS hex_common.py gen_op_regs.py ${SEMANTICS} attribs_def.h
 )
 
 add_custom_command(
   OUTPUT ${OP_ATTRIBS_H}
-  COMMAND python3 gen_op_attribs.py ${SEMANTICS} attribs_def.h ${OP_ATTRIBS_H}
+  COMMAND ${Python3_EXECUTABLE} gen_op_attribs.py ${SEMANTICS} attribs_def.h ${OP_ATTRIBS_H}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   DEPENDS hex_common.py gen_op_attribs.py ${SEMANTICS} attribs_def.h
 )
 
 add_custom_command(
   OUTPUT ${SHORTCODE_H}
-  COMMAND python3 gen_shortcode.py ${SEMANTICS} attribs_def.h ${SHORTCODE_H}
+  COMMAND ${Python3_EXECUTABLE} gen_shortcode.py ${SEMANTICS} attribs_def.h ${SHORTCODE_H}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   DEPENDS hex_common.py gen_shortcode.py ${SEMANTICS} attribs_def.h
 )
@@ -85,7 +85,7 @@ add_custom_command(
 set(DECTREE_HEADER ${CMAKE_CURRENT_BINARY_DIR}/dectree_generated.h)
 add_custom_command(
   OUTPUT ${DECTREE_HEADER}
-  COMMAND PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR} python3 dectree.py ${DECTREE_HEADER}
+  COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR} ${Python3_EXECUTABLE} dectree.py ${DECTREE_HEADER}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   DEPENDS dectree.py ${DECTREE_IMPORT}
 )

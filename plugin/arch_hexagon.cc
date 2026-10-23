@@ -125,7 +125,8 @@ public:
       }
     }
     for (auto &reloc : relocTypes) {
-      LogWarn("Unsupported ELF relocation type: %lu", reloc);
+      LogWarn("Unsupported ELF relocation type: %llu",
+              static_cast<unsigned long long>(reloc));
     }
     return true;
   }

@@ -18,6 +18,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "third_party/qemu-hexagon/decode.h"
 #include "third_party/qemu-hexagon/opcodes.h"
 

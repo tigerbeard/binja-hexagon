@@ -19,19 +19,19 @@ if(NOT USE_DOCKER_BUILD)
   message(STATUS "USE_DOCKER_BUILD is not set. Skipping build process, and using prebuilt binaries instead.")
 
   add_test(NAME bn_llil_test
-    COMMAND python3 bn_llil_test.py
+    COMMAND ${Python3_EXECUTABLE} bn_llil_test.py
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
   set_tests_properties(bn_llil_test PROPERTIES
-    ENVIRONMENT "PYTHONPATH=${BN_INSTALL_DIR}/python;TEST_TARGET_FILE=${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/bn_llil_test_app"
+    ENVIRONMENT "PYTHONPATH=${BN_PYTHON_DIR};HEXAGON_PLUGIN=$<TARGET_FILE:arch_hexagon>;TEST_TARGET_FILE=${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/bn_llil_test_app"
   )
 
   add_test(NAME bn_hlil_test
-    COMMAND python3 bn_hlil_test.py
+    COMMAND ${Python3_EXECUTABLE} bn_hlil_test.py
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
   set_tests_properties(bn_hlil_test PROPERTIES
-    ENVIRONMENT "PYTHONPATH=${BN_INSTALL_DIR}/python;TEST_TARGET_FILE=${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/bn_hlil_test_app"
+    ENVIRONMENT "PYTHONPATH=${BN_PYTHON_DIR};HEXAGON_PLUGIN=$<TARGET_FILE:arch_hexagon>;TEST_TARGET_FILE=${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/bn_hlil_test_app"
   )
 else()
   # bn_llil_test
@@ -52,14 +52,14 @@ else()
   )
 
   add_test(NAME bn_llil_test
-    COMMAND python3 bn_llil_test.py
+    COMMAND ${Python3_EXECUTABLE} bn_llil_test.py
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
   set_tests_properties(bn_llil_test PROPERTIES
     DEPENDS bn_llil_test_app
   )
   set_tests_properties(bn_llil_test PROPERTIES
-    ENVIRONMENT "PYTHONPATH=${BN_INSTALL_DIR}/python;TEST_TARGET_FILE=${BN_LLIL_TEST_BIN}"
+    ENVIRONMENT "PYTHONPATH=${BN_PYTHON_DIR};HEXAGON_PLUGIN=$<TARGET_FILE:arch_hexagon>;TEST_TARGET_FILE=${BN_LLIL_TEST_BIN}"
   )
 
   # bn_hlil_test
@@ -80,14 +80,14 @@ else()
   )
 
   add_test(NAME bn_hlil_test
-    COMMAND python3 bn_hlil_test.py
+    COMMAND ${Python3_EXECUTABLE} bn_hlil_test.py
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
   set_tests_properties(bn_hlil_test PROPERTIES
     DEPENDS bn_hlil_test_app
   )
   set_tests_properties(bn_hlil_test PROPERTIES
-    ENVIRONMENT "PYTHONPATH=${BN_INSTALL_DIR}/python;TEST_TARGET_FILE=${BN_HLIL_TEST_BIN}"
+    ENVIRONMENT "PYTHONPATH=${BN_PYTHON_DIR};HEXAGON_PLUGIN=$<TARGET_FILE:arch_hexagon>;TEST_TARGET_FILE=${BN_HLIL_TEST_BIN}"
   )
 
 endif()

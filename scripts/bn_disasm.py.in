@@ -3,12 +3,12 @@ import argparse
 import enum
 import sys
 import os
-sys.path.append(os.path.join('${BN_INSTALL_DIR}', 'python'))
+sys.path.append('${BN_PYTHON_DIR}')
 
 try:
   import binaryninja as binja
 except ImportError:
-  print('Failed to import binaryninja Python API. Check BN_INSTALL_DIR.')
+  print('Failed to import binaryninja Python API. Check BN_INSTALL_DIR (BN_PYTHON_DIR).')
   sys.exit(1)
 
 
@@ -36,7 +36,7 @@ def main():
 
   print('Analyzing {0}'.format(args.input))
   binja.log.log_to_stdout(True)
-  bv = binja.BinaryViewType.get_view_of_file(args.input)
+  bv = binja.load(args.input)
 
   if args.listing == Listing.disasm:
     for line in bv.linear_disassembly:

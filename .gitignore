@@ -7,3 +7,5 @@ cscope.*
 compile_commands.json
 build/
 *.idb
+.venv/
+__pycache__/

@@ -605,7 +605,7 @@ def gen_insn_text_func(tag, regs, imms):
 def process_all_tags(tagregs, tagimms):
   tag_to_fbody = OrderedDict({tag: '' for tag in tags})
   print('Processing %d tags in parallel' % (len(tags)))
-  with concurrent.futures.ProcessPoolExecutor(max_workers=5) as executor:
+  with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
     future_to_tag = {}
     for i, tag in enumerate(tags):
       if not behdict[tag]:
@@ -664,7 +664,7 @@ using absl::StrCat;
   f.write('extern const InsnTextFunc opcode_textptr[XX_LAST_OPCODE] = {\n')
   for tag in tags:
     if not behdict[tag]:
-      return
+      continue
     f.write('[{0}] = tokenize_{0},\n'.format(tag))
   f.write('};\n')
 

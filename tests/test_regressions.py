@@ -487,6 +487,21 @@ f:
     self.assertEqual(llvm_diff.compare(binja, words), [])
 
 
+class TestOperatorPrecedence(SnippetTest):
+  # #46: the semantics parser grouped binary operators to the right, so
+  # add(Rs,sub(#s6,Ru)), whose semantics are Rs - Ru + s6, lifted as
+  # Rs - (Ru + s6).
+
+  def test_add_of_sub(self):
+    f = self.analyse('''
+f:
+  { r0 = add(r1, sub(#5, r2)) }
+  { jumpr r31 }
+''')['f']
+    self.assertIn('temp#0.d = R1 - R2 + 5', hexasm.llil(f))
+    self.assertIn('return arg2 - arg3 + 5', hexasm.hlil(f))
+
+
 class TestCallingConvention(SnippetTest):
   # #5: arguments R0-R8, no caller-saved registers, only FP and LR
   # callee-saved, and the callee popping stack arguments.

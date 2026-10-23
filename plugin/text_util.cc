@@ -34,9 +34,9 @@ std::string GeneralRegisterName(uint32_t reg) {
   case HEX_REG_LR: // R31
     return "LR";
   default:
-    LOG(FATAL) << "Unexpected general register reg " << reg;
+    LOG(ERROR) << "Unexpected general register reg " << reg;
   }
-  return "";
+  return absl::StrCat("R", reg - HEX_REG_R00);
 }
 
 std::string ControlRegisterName(uint32_t reg) {
@@ -88,9 +88,9 @@ std::string ControlRegisterName(uint32_t reg) {
   case HEX_REG_C20 ... HEX_REG_C29: // Reserved.
     return absl::StrCat("C", reg - HEX_REG_C00);
   default:
-    LOG(FATAL) << "Unexpected control register reg " << reg;
+    LOG(ERROR) << "Unexpected control register reg " << reg;
   }
-  return "";
+  return absl::StrCat("C", reg - HEX_REG_C00);
 }
 
 std::string PredicateRegisterName(uint32_t reg) {
@@ -104,9 +104,9 @@ std::string PredicateRegisterName(uint32_t reg) {
   case HEX_REG_P3:
     return "P3";
   default:
-    LOG(FATAL) << "Unexpected predicate register reg " << reg;
+    LOG(ERROR) << "Unexpected predicate register reg " << reg;
   }
-  return "";
+  return absl::StrCat("P", reg - HEX_REG_P0);
 }
 
 std::string SystemRegisterName(uint32_t reg) {
@@ -274,9 +274,11 @@ std::string SystemRegisterName(uint32_t reg) {
   case HEX_SREG_S85:
     return "S85";
   default:
-    LOG(FATAL) << "Unexpected system register reg " << reg;
+    // Reserved and undocumented numbers. The 7-bit Ss field encodes S0-S127,
+    // so these occur in real code and in data decoded as code.
+    break;
   }
-  return "";
+  return absl::StrCat("S", reg - HEX_SREG_SGP0);
 }
 
 } // namespace

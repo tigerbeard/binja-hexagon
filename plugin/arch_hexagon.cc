@@ -239,7 +239,8 @@ public:
   }
 
   std::string GetFlagName(uint32_t flag) override {
-    LOG(FATAL) << "Unexpected GetFlagName for flag " << flag;
+    // The architecture defines no flags.
+    LOG(ERROR) << "Unexpected GetFlagName for flag " << flag;
     return "";
   }
 
@@ -261,7 +262,7 @@ public:
     case HEX_REG_P3:
       return BNRegisterInfo{HEX_REG_P3_0, 3, 1, NoExtend};
     case HEX_REG_USR_LPCFG:
-      CHECK_EQ(reg_field_info[REG_FIELD_USR_LPCFG].offset, 8);
+      DCHECK_EQ(reg_field_info[REG_FIELD_USR_LPCFG].offset, 8);
       return BNRegisterInfo{HEX_REG_USR, 1, 1, NoExtend};
     case HEX_REG_R00 ... HEX_REG_R31:
       return BNRegisterInfo{reg, 0, 4, NoExtend};

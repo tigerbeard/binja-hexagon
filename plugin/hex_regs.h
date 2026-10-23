@@ -152,6 +152,10 @@ enum {
 //
 // System registers
 //
+// Names follow the map in QEMU's Hexagon system emulation, which tracks newer
+// cores. The V67 PRM (80-N2040-45, p.363) differs: S11 is reserved, S20 is
+// IPEND, S22 is IAD and S53 is PMUCFG there. Numbers without a name print as
+// S<n>.
 enum {
     HEX_SREG_SGP0 = 0,
     HEX_SREG_SGP1 = 1,

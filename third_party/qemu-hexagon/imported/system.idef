@@ -229,6 +229,8 @@ Q6INSN(Y2_ickill,"ickill",ATTRIBS(A_ICOP,A_PRIV,A_ICFLUSHOP),"Instruction Cache 
 Q6INSN(Y2_isync,"isync",ATTRIBS(),"Memory Synchronization",{fISYNC();})
 Q6INSN(Y2_barrier,"barrier",ATTRIBS(A_RESTRICT_SLOT0ONLY),"Memory Barrier",{fBARRIER();})
 Q6INSN(Y2_syncht,"syncht",ATTRIBS(A_RESTRICT_SLOT0ONLY),"Memory Synchronization",{fSYNCH();})
+/* V71 PRM 80-N2040-51, p.299. */
+Q6INSN(Y2_dmsyncht,"Rd32=dmsyncht",ATTRIBS(A_RESTRICT_SLOT0ONLY),"DMA Synchronization",{fSYNCH();})
 
 
 Q6INSN(Y2_dcfetchbo,"dcfetch(Rs32+#u11:3)",ATTRIBS(A_RESTRICT_PREFERSLOT0,A_DCFETCH),"Data Cache Prefetch",{fEA_RI(RsV,uiV); fDCFETCH(EA);})

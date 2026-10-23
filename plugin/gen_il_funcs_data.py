@@ -253,5 +253,8 @@ SUPPORTED_TAGS = [
     'SL2_jumpr31_t', 'SL2_jumpr31_f', 'SL2_jumpr31_tnew', 'SL2_jumpr31_fnew',
     'SS1_storew_io', 'SS1_storeb_io', 'SS2_storeh_io', 'SS2_stored_sp',
     'SS2_storew_sp', 'SS2_storewi0', 'SS2_storebi0', 'SS2_storewi1',
-    'SS2_storebi1', 'SS2_allocframe'
+    'SS2_storebi1', 'SS2_allocframe',
+    # V71 load-acquire and store-release, lifted as plain loads and stores.
+    'L2_loadw_aq', 'L4_loadd_aq', 'S2_storew_rl_at_vi', 'S2_storew_rl_st_vi',
+    'S4_stored_rl_at_vi', 'S4_stored_rl_st_vi'
 ]

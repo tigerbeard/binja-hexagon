@@ -487,13 +487,13 @@ class InsnTreeTransformer(Transformer):
 
   # gp_reg: "gp"
   @v_args(meta=True)
-  def gp_reg(self, children, meta):
+  def gp_reg(self, meta, children):
     word = self.beh[meta.start_pos:meta.end_pos].upper()
     return [GPRegisterToken('"{}"'.format(word))]
 
   # sys_reg: "pc" | "sgp" DIGIT ":0"? | "r29" | "r31"
   @v_args(meta=True)
-  def sys_reg(self, children, meta):
+  def sys_reg(self, meta, children):
     word = self.beh[meta.start_pos:meta.end_pos].upper()
     if word == 'R29':
       word = 'SP'
@@ -535,15 +535,15 @@ class InsnTreeTransformer(Transformer):
     ]
 
   @v_args(meta=True)
-  def wrap_instruction_terminal(self, children, meta):
+  def wrap_instruction_terminal(self, meta, children):
     return self.wrap_full_match(InstructionToken, meta)
 
   @v_args(meta=True)
-  def wrap_reg_terminal(self, children, meta):
+  def wrap_reg_terminal(self, meta, children):
     return self.wrap_full_match(RegisterToken, meta)
 
   @v_args(meta=True)
-  def wrap_text_terminal(self, children, meta):
+  def wrap_text_terminal(self, meta, children):
     return self.wrap_full_match(TextToken, meta)
 
   insn = wrap_instruction_terminal

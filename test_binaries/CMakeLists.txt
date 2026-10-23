@@ -23,6 +23,7 @@ if(NOT USE_DOCKER_BUILD)
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
   set_tests_properties(bn_llil_test PROPERTIES
+    LABELS bn
     ENVIRONMENT "PYTHONPATH=${BN_PYTHON_DIR};HEXAGON_PLUGIN=$<TARGET_FILE:arch_hexagon>;TEST_TARGET_FILE=${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/bn_llil_test_app"
   )
 
@@ -31,6 +32,7 @@ if(NOT USE_DOCKER_BUILD)
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
   set_tests_properties(bn_hlil_test PROPERTIES
+    LABELS bn
     ENVIRONMENT "PYTHONPATH=${BN_PYTHON_DIR};HEXAGON_PLUGIN=$<TARGET_FILE:arch_hexagon>;TEST_TARGET_FILE=${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/bn_hlil_test_app"
   )
 else()
@@ -59,6 +61,7 @@ else()
     DEPENDS bn_llil_test_app
   )
   set_tests_properties(bn_llil_test PROPERTIES
+    LABELS bn
     ENVIRONMENT "PYTHONPATH=${BN_PYTHON_DIR};HEXAGON_PLUGIN=$<TARGET_FILE:arch_hexagon>;TEST_TARGET_FILE=${BN_LLIL_TEST_BIN}"
   )
 
@@ -87,6 +90,7 @@ else()
     DEPENDS bn_hlil_test_app
   )
   set_tests_properties(bn_hlil_test PROPERTIES
+    LABELS bn
     ENVIRONMENT "PYTHONPATH=${BN_PYTHON_DIR};HEXAGON_PLUGIN=$<TARGET_FILE:arch_hexagon>;TEST_TARGET_FILE=${BN_HLIL_TEST_BIN}"
   )
 

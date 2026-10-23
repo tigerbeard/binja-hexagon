@@ -32,9 +32,27 @@ Main features:
 
 ## Status
 
-The plugin is very much in Alpha stage. Only around 40% of Hexagon's > 2000
-instructions are currently lifted to LLIL. Feedback, bug reports and PRs are
-welcome.
+This fork of `google/binja-hexagon` builds against Binary Ninja 6.1 (the
+pinned API revision is in [setup](/docs/setup.md)). The plugin is in alpha.
+
+It decodes the instruction set of QEMU's Hexagon target (V67 scalar, V66
+HVX), plus the V71 acquire and release instructions. Later scalar additions
+and HVX V68 and above are not decoded yet.
+
+Each packet is one Binary Ninja instruction. Of the 2,237 instructions:
+
+*   906 are lifted to LLIL with their semantics. That is 53% of the 1,718
+    scalar instructions; no HVX instruction is.
+*   1,328 are lifted as intrinsics (809 scalar, 519 HVX). Their registers and
+    data flow are right, but the operation is opaque. 240 of them load or
+    store memory.
+*   3 have their own lifts: `hintjumpr` is a no-op, `trap1` a system call and
+    `rte` unimplemented.
+
+Hardware loops (`loopN`, `spNloop0` and `endloop`) are lifted as loops when
+Binary Ninja analyses a function.
+
+Feedback, bug reports and PRs are welcome.
 
 ## Acknowledgments
 

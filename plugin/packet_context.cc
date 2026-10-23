@@ -220,7 +220,7 @@ size_t TempRegSize(uint32_t index) {
     return 1;
   }
   if (index < kCircTempBase) {
-    // LOCAL1_REG, LOCAL2_REG, LOCAL4_REG and LOCAL8_REG.
+    // LOCAL1_REG, LOCAL2_REG, LOCAL4_REG, LOCAL8_REG and LOCAL16_REG.
     return size_t{1} << ((index - kLocalTempBase) / kLocalTempsPerSize);
   }
   return 4; // CIRC_REG.

@@ -297,6 +297,11 @@ SUPPORTED_TAGS = [
     'AM_addw_aq', 'AM_addw_rl', 'AM_andw_aq', 'AM_andw_rl', 'AM_orw_aq',
     'AM_orw_rl', 'AM_xorw_aq', 'AM_xorw_rl', 'AM_swapw_aq', 'AM_swapw_rl',
     'AM_swapd_aq', 'AM_swapd_rl',
+    # 128-bit arithmetic, as 16-byte IL: complex multiplies of words and
+    # convergent rounding of pairs.
+    'M7_wcmpyrw', 'M7_wcmpyrwc', 'M7_wcmpyiw', 'M7_wcmpyiwc',
+    'M7_wcmpyrw_rnd', 'M7_wcmpyrwc_rnd', 'M7_wcmpyiw_rnd', 'M7_wcmpyiwc_rnd',
+    'A7_croundd_ri', 'A7_croundd_rr',
     # Shifts by a register amount, which shift the other way when the amount
     # is negative, and register-amount bit operations.
     'S2_asl_r_r', 'S2_asl_r_r_acc', 'S2_asl_r_r_nac', 'S2_asl_r_r_and',

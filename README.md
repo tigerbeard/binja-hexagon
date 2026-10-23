@@ -36,14 +36,17 @@ This fork of `google/binja-hexagon` builds against Binary Ninja 6.1 (the
 pinned API revision is in [setup](/docs/setup.md)). The plugin is in alpha.
 
 It decodes the instructions that upstream QEMU's Hexagon target defines,
-which reach V81 for scalar and HVX instructions. The QEMU commit is in
+which reach V81 for scalar and HVX instructions, and QEMU's legacy
+(`:deprecated`) encodings. The QEMU commit is in
 [`third_party/qemu-hexagon/UPSTREAM`](/third_party/qemu-hexagon/UPSTREAM).
+Hexagon versions only add instructions, so one decoder serves code for any
+version from V5 on.
 
-Each packet is one Binary Ninja instruction. Of the 2,393 instructions:
+Each packet is one Binary Ninja instruction. Of the 2,396 instructions:
 
-*   921 are lifted to LLIL with their semantics. That is 53% of the 1,745
+*   974 are lifted to LLIL with their semantics. That is 56% of the 1,748
     scalar instructions; no HVX instruction is.
-*   1,469 are lifted as intrinsics (821 scalar, 648 HVX). Their registers and
+*   1,419 are lifted as intrinsics (771 scalar, 648 HVX). Their registers and
     data flow are right, but the operation is opaque. 241 of them load or
     store memory.
 *   3 have their own lifts: `hintjumpr` is a no-op, `trap1` a system call and

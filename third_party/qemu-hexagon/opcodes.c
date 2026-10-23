@@ -100,11 +100,15 @@ const OpcodeEncoding opcode_encodings[] = {
 #define DEF_EXT_ENC(OPCODE, CLASS, ENCSTR)                                     \
   [OPCODE] = {.encoding = ENCSTR, .enc_class = CLASS},
 
+/* Legacy encodings decode as TAG_deprecated (gen_semantics.c). */
+#define LEGACY_DEF_ENC32(TAG, ENCSTR) [TAG##_deprecated] = {.encoding = ENCSTR},
+
 #include "third_party/qemu-hexagon/imported/encode.def"
 
 #undef DEF_ENC32
 #undef DEF_ENC_SUBINSN
 #undef DEF_EXT_ENC
+#undef LEGACY_DEF_ENC32
 };
 
 void opcode_init(void) {

@@ -347,6 +347,24 @@ ATTRIBUTES( \
     "ATTRIBS(A_ARCHV2)" \
 )
 SEMANTICS( \
+    "S4_subaddi", \
+    "Rd32=add(Rs32,sub(#s6,Ru32))", \
+    \"\"\"{ RdV = RsV - RuV + fIMMEXT(siV); }\"\"\" \
+)
+ATTRIBUTES( \
+    "S4_subaddi", \
+    "ATTRIBS()" \
+)
+SEMANTICS( \
+    "S2_asl_r_r_acc", \
+    "Rx32+=asl(Rs32,Rt32)", \
+    \"\"\"{ RxV = RxV + ((RtV < 0) ? (RsV >> 1) : (RsV << RtV)); }\"\"\" \
+)
+ATTRIBUTES( \
+    "S2_asl_r_r_acc", \
+    "ATTRIBS()" \
+)
+SEMANTICS( \
     "L2_loadrub_pi", \
     "Rd32=memub""(Rx32++#s4:""0"")", \
     \"\"\"{fEA_REG(RxV); fPM_I(RxV,siV); fLOAD(1,1,u,EA,RdV);}\"\"\" \
@@ -990,8 +1008,40 @@ class TestGenIlFunc(unittest.TestCase):
         self.parse_semantics('M2_acci'), [
             IlSetRegister(
                 4, 'RxV',
+                IlAdd(4, IlAdd(4, IlRegister(4, 'RxV'), IlRegister(4, 'RsV')),
+                      IlRegister(4, 'RtV')))
+        ])
+
+  def test_operators_group_left_to_right(self):
+    # Rs - Ru + s6 is (Rs - Ru) + s6; grouping to the right negated s6.
+    self.assertEqual(
+        self.parse_semantics('S4_subaddi'), [
+            IlSetRegister(
+                4, 'RdV',
+                IlAdd(4, IlSub(4, IlRegister(4, 'RsV'), IlRegister(4, 'RuV')),
+                      IlConst(4, 'siV')))
+        ])
+
+  def test_ternary_in_expression(self):
+    # a = E[c ? t : f] lifts as if (c) a = E[t]; else a = E[f];
+    self.assertEqual(
+        self.parse_semantics('S2_asl_r_r_acc'), [
+            '{ LowLevelILLabel true_case, false_case, done;',
+            IlIf(
+                IlCompareSignedLessThan(4, IlRegister(4, 'RtV'),
+                                        IlConst(4, '0')), 'true_case',
+                'false_case'), 'true_case',
+            IlSetRegister(
+                4, 'RxV',
                 IlAdd(4, IlRegister(4, 'RxV'),
-                      IlAdd(4, IlRegister(4, 'RsV'), IlRegister(4, 'RtV'))))
+                      IlArithShiftRight(4, IlRegister(4, 'RsV'),
+                                        IlConst(4, '1')))),
+            IlGoto('done'), 'false_case',
+            IlSetRegister(
+                4, 'RxV',
+                IlAdd(4, IlRegister(4, 'RxV'),
+                      IlShiftLeft(4, IlRegister(4, 'RsV'),
+                                  IlRegister(4, 'RtV')))), 'done', '}'
         ])
 
   def test_loadrub_pi(self):

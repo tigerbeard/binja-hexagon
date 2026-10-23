@@ -76,10 +76,22 @@ const OpcodeEncoding opcode_encodings[] = {
   [TAG] = {.encoding = ENCSTR, .enc_class = CLASS},
 #define DEF_EXT_ENC(TAG, CLASS, ENCSTR)                                        \
   [TAG] = {.encoding = ENCSTR, .enc_class = CLASS},
+#define LEGACY_DEF_ENC32(TAG, ENCSTR) [TAG##_deprecated] = {.encoding = ENCSTR},
 #include "third_party/qemu-hexagon/imported/encode.def"
 #undef DEF_ENC32
 #undef DEF_ENC_SUBINSN
 #undef DEF_EXT_ENC
+#undef LEGACY_DEF_ENC32
+};
+
+/*
+ * A legacy encoding's instruction, TAG_deprecated (gen_semantics.c), has
+ * TAG's syntax with ":deprecated". legacy_base[TAG_deprecated] is TAG + 1.
+ */
+static const int legacy_base[XX_LAST_OPCODE] = {
+#define LEGACY_DEF_ENC32(TAG, ENCSTR) [TAG##_deprecated] = TAG + 1,
+#include "third_party/qemu-hexagon/imported/encode.def"
+#undef LEGACY_DEF_ENC32
 };
 
 static const char *const opcode_enc_class_names[XX_LAST_ENC_CLASS] = {
@@ -114,7 +126,12 @@ static void gen_iset_table(FILE *out) {
   for (i = 0; i < XX_LAST_OPCODE; i++) {
     fprintf(out, "\t\'%s\' : {\n", opcode_names[i]);
     fprintf(out, "\t\t\'tag\' : \'%s\',\n", opcode_names[i]);
-    fprintf(out, "\t\t\'syntax\' : \'%s\',\n", opcode_syntax[i]);
+    if (legacy_base[i]) {
+      fprintf(out, "\t\t\'syntax\' : \'%s:deprecated\',\n",
+              opcode_syntax[legacy_base[i] - 1]);
+    } else {
+      fprintf(out, "\t\t\'syntax\' : \'%s\',\n", opcode_syntax[i]);
+    }
     fprintf(out, "\t\t\'rregs\' : \'%s\',\n", opcode_rregs[i]);
     fprintf(out, "\t\t\'wregs\' : \'%s\',\n", opcode_wregs[i]);
     fprintf(out, "\t\t\'enc\' : \'%s\',\n", get_opcode_enc(i));

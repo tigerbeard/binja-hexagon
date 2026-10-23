@@ -22,7 +22,56 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #define STRINGIZE(X) #X
+
+/*
+ * QEMU's legacy encodings (LEGACY_DEF_ENC32) are older encodings of current
+ * instructions, which the PRM lists as Rd=add(Rs,Rt):sat:deprecated and so on.
+ * Each one becomes an instruction of its own, TAG_deprecated, with TAG's
+ * semantics and attributes and ":deprecated" after its syntax.
+ */
+typedef struct {
+  const char *tag;
+  const char *beh;
+  const char *sem;
+  const char *attribs;
+} InsnText;
+
+static const InsnText insn_texts[] = {
+#define Q6INSN(TAG, BEH, ATTRIBS, DESCR, SEM)                                  \
+  {#TAG, STRINGIZE(BEH), STRINGIZE(SEM), STRINGIZE(ATTRIBS)},
+#define EXTINSN(TAG, BEH, ATTRIBS, DESCR, SEM)                                 \
+  Q6INSN(TAG, BEH, ATTRIBS, DESCR, SEM)
+#include "third_party/qemu-hexagon/imported/allidefs.def"
+#undef Q6INSN
+#undef EXTINSN
+};
+
+static int print_legacy_insn(FILE *outfile, const char *tag) {
+  size_t i;
+  for (i = 0; i < sizeof(insn_texts) / sizeof(insn_texts[0]); i++) {
+    const InsnText *insn = &insn_texts[i];
+    if (strcmp(insn->tag, tag) == 0) {
+      fprintf(outfile,
+              "SEMANTICS( \\\n"
+              "    \"%s_deprecated\", \\\n"
+              "    %s \":deprecated\", \\\n"
+              "    \"\"\"%s\"\"\" \\\n"
+              ")\n",
+              tag, insn->beh, insn->sem);
+      fprintf(outfile,
+              "ATTRIBUTES( \\\n"
+              "    \"%s_deprecated\", \\\n"
+              "    \"%s\" \\\n"
+              ")\n",
+              tag, insn->attribs);
+      return 0;
+    }
+  }
+  fprintf(stderr, "No instruction %s for its legacy encoding\n", tag);
+  return 1;
+}
 
 int main(int argc, char *argv[]) {
   FILE *outfile;
@@ -84,6 +133,16 @@ int main(int argc, char *argv[]) {
 #include "third_party/qemu-hexagon/imported/allidefs.def"
 #undef Q6INSN
 #undef EXTINSN
+
+  {
+    int errors = 0;
+#define LEGACY_DEF_ENC32(TAG, ENCSTR) errors += print_legacy_insn(outfile, #TAG);
+#include "third_party/qemu-hexagon/imported/encode.def"
+#undef LEGACY_DEF_ENC32
+    if (errors) {
+      return 1;
+    }
+  }
 
 /*
  * Process the macro definitions

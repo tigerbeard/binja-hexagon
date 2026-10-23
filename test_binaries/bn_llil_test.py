@@ -678,8 +678,8 @@ R1.L = #0x22 }
 0: temp1.d = R1
 1: temp104.q = 1
 2: temp105.q = 6
-3: temp1.d = temp1.d & not.q(((sx.q(1) << temp104.q) - 1) << temp105.q)
-4: temp1.d = temp1.d | (R0 & ((sx.q(1) << temp104.q) - 1)) << temp105.q
+3: temp1.d = temp1.d & not.q(((1 << temp104.q) - 1) << temp105.q)
+4: temp1.d = temp1.d | (R0 & ((1 << temp104.q) - 1)) << temp105.q
 5: R1 = temp1.d
 6: temp200.d = LR
 7: <return> jump(LR)''')

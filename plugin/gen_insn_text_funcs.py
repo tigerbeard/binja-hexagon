@@ -100,6 +100,7 @@ insn_grammar = r"""
     nomatch_hint: ":nomatch"
     order_hint: ":at" | ":st"
     vh_hint: ":v" | ":h"
+    deprecated_hint: ":deprecated"
     ?res_hint: shift_hint [res_hint]
              | rnd_hint [res_hint]
              | sat_hint [res_hint]
@@ -115,6 +116,7 @@ insn_grammar = r"""
              | nomatch_hint
              | order_hint
              | vh_hint
+             | deprecated_hint
 
     insn: WORD
         | WORD "." WORD
@@ -573,6 +575,7 @@ class InsnTreeTransformer(Transformer):
   scatter_hint = wrap_text_terminal
   order_hint = wrap_text_terminal
   vh_hint = wrap_text_terminal
+  deprecated_hint = wrap_text_terminal
   nomatch_hint = wrap_text_terminal
   cmp_sign = wrap_text_terminal
   not_sign = wrap_text_terminal

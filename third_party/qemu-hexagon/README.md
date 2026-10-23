@@ -18,6 +18,11 @@ Local changes include:
 *  `dectree.py` takes an immediate's width from its encoding when the encoding
    has more bits than the syntax says (V79 `pause`).
 
+*  QEMU's legacy encodings (`LEGACY_DEF_ENC32`), which QEMU leaves out, decode
+   as instructions of their own, `TAG_deprecated`, with `TAG`'s semantics and
+   `:deprecated` after its syntax, as the PRM writes them
+   (`gen_semantics.c`, `gen_dectree_import.c`, `opcodes.c`).
+
 *  Replaces `assert`s with `longjmp`s, so decoder fails gracefully for invalid, non-code input.
 
 *  Removed QEMU specific code (`gen_tcg_funcs.py`).

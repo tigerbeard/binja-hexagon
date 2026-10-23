@@ -34,6 +34,7 @@ import sys
 import tempfile
 
 import hexasm
+import isa_versions
 
 _REG_ALIASES = {'sp': 'r29', 'fp': 'r30', 'lr': 'r31'}
 _PAIR = re.compile(r'\b([rcsgv])(\d+):(\d+)\b')
@@ -123,8 +124,9 @@ DEFAULT_ISET = os.environ.get(
                  'third_party', 'qemu-hexagon', 'iset.py'))
 
 
-def pattern_words(regex, iset_path=DEFAULT_ISET, seed=0):
-  """One word per 32-bit encoding whose tag matches |regex|.
+def pattern_words(regex, iset_path=DEFAULT_ISET, seed=0, llvm_only=True):
+  """One word per 32-bit encoding whose tag matches |regex| (and that LLVM
+  knows, if |llvm_only|).
 
   Encodings come from the build's iset.py, which has every encoding with its
   macros expanded. Operand fields get random bits (register fields even, as
@@ -137,7 +139,9 @@ def pattern_words(regex, iset_path=DEFAULT_ISET, seed=0):
   words = []
   for tag, info in sorted(namespace['iset'].items()):
     bits = info['enc'].replace(' ', '')
-    if not re.search(regex, tag) or len(bits) != 32 or 'PP' not in info['enc']:
+    if (not re.search(regex, tag) or len(bits) != 32 or
+        'PP' not in info['enc'] or
+        (llvm_only and not isa_versions.known_to_llvm(tag))):
       continue
     word = 0
     for i, b in enumerate(bits):

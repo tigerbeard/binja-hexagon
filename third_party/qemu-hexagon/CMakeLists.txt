@@ -1,9 +1,33 @@
 #
+#  Step 0
+#  imported/allext.idef includes generated_hlx_ext.idef, which QEMU's build
+#  makes from imported/hlx_ext.idef by running it through the preprocessor.
+#
+set(HLX_EXT_IDEF ${CMAKE_CURRENT_BINARY_DIR}/generated_hlx_ext.idef)
+add_custom_command(
+  OUTPUT ${HLX_EXT_IDEF}
+  COMMAND ${CMAKE_C_COMPILER} -E -P -x c -o ${HLX_EXT_IDEF} imported/hlx_ext.idef
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  DEPENDS imported/hlx_ext.idef
+)
+add_custom_target(gen_hlx_ext_idef
+  DEPENDS ${HLX_EXT_IDEF}
+)
+
+#
 #  Step 1
 #  We use a C program to create semantics_generated.pyinc
 #
 add_executable(gen_semantics
   gen_semantics.c
+)
+
+target_include_directories(gen_semantics
+  PRIVATE
+  ${CMAKE_CURRENT_BINARY_DIR}
+)
+add_dependencies(gen_semantics
+  gen_hlx_ext_idef
 )
 
 set(SEMANTICS ${CMAKE_CURRENT_BINARY_DIR}/semantics_generated.pyinc)
@@ -69,7 +93,7 @@ target_include_directories(gen_dectree_import
 )
 
 add_custom_target(gen_opcodes_def_h
-  DEPENDS ${OPCODES_DEF_H} ${OP_REGS_H}
+  DEPENDS ${OPCODES_DEF_H} ${OP_REGS_H} ${HLX_EXT_IDEF}
 )
 add_dependencies(gen_dectree_import
   gen_opcodes_def_h

@@ -39,10 +39,10 @@ def uniquify(seq):
 
 
 regre = re.compile(
-    r"((?<!DUP)[MNORCPQXSGVZA])([stuvwxyzdefg]+)([.]?[LlHh]?)(\d+S?)")
+    r"((?<!DUP)[MNORCPQXSGVZALK])([stuvwxyzdefg]+)([.]?[LlHh]?)(\d+S?)")
 immre = re.compile(r"[#]([rRsSuUm])(\d+)(?:[:](\d+))?")
 reg_or_immre = \
-    re.compile(r"(((?<!DUP)[MNRCOPQXSGVZA])([stuvwxyzdefg]+)" + \
+    re.compile(r"(((?<!DUP)[MNRCOPQXSGVZALK])([stuvwxyzdefg]+)" + \
                 "([.]?[LlHh]?)(\d+S?))|([#]([rRsSuUm])(\d+)[:]?(\d+)?)")
 relimmre = re.compile(r"[#]([rR])(\d+)(?:[:](\d+))?")
 absimmre = re.compile(r"[#]([sSuUm])(\d+)(?:[:](\d+))?")
@@ -264,12 +264,11 @@ def read_semantics_file(name):
 
 
 def read_attribs_file_obj(f):
-  attribre = re.compile(r'DEF_ATTRIB\(([A-Za-z0-9_]+), ([^,]*), ' +
-                        r'"([A-Za-z0-9_\.]*)", "([A-Za-z0-9_\.]*)"\)')
-  for line in f.readlines():
-    if not attribre.match(line):
-      continue
-    (attrib_base, descr, rreg, wreg) = attribre.findall(line)[0]
+  # A definition may span lines.
+  attribre = re.compile(r'^DEF_ATTRIB\(([A-Za-z0-9_]+),\s*([^,]*),\s*' +
+                        r'"([A-Za-z0-9_\.]*)",\s*"([A-Za-z0-9_\.]*)"\)',
+                        re.MULTILINE)
+  for (attrib_base, descr, rreg, wreg) in attribre.findall(f.read()):
     attrib_base = 'A_' + attrib_base
     attribinfo[attrib_base] = {'rreg': rreg, 'wreg': wreg, 'descr': descr}
 

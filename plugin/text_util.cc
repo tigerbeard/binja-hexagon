@@ -288,6 +288,9 @@ std::string GetRegisterName(absl::string_view reg_type,
   std::string out;
   if (reg_type == "R" || reg_type == "N") {
     out = GeneralRegisterName(HEX_REG_R00 + regno);
+  } else if (reg_type == "K") {
+    // An HLX new value, Ku16.new, resolved to the producer's L register.
+    out = absl::StrCat("L", regno);
   } else if (reg_type == "C") {
     out = ControlRegisterName(HEX_REG_C00 + regno);
   } else if (reg_type == "P") {

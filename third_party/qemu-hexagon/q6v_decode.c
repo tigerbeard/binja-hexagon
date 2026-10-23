@@ -179,7 +179,13 @@ static unsigned int decode_insns(Insn *insn, uint32_t encoding) {
     /* start with EE table - duplex instructions */
     table = &dectree_table_DECODE_ROOT_EE;
   }
-  return decode_insns_tablewalk(insn, table, encoding);
+  unsigned int count = decode_insns_tablewalk(insn, table, encoding);
+  /* As QEMU does, try HLX for a 32-bit word that is no other instruction. */
+  if (count == 0 && parse_bits(encoding) != 0) {
+    count = decode_insns_tablewalk(insn, &dectree_table_DECODE_EXT_EXT_hlx,
+                                   encoding);
+  }
+  return count;
 }
 
 static void decode_add_endloop_insn(Insn *insn, int loopnum) {

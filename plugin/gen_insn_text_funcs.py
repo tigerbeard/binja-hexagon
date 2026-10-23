@@ -23,6 +23,7 @@ import string
 from io import StringIO
 from collections import namedtuple, OrderedDict
 from lark import Lark, Transformer, v_args
+from lark.exceptions import LarkError
 
 from hex_common import *
 
@@ -382,6 +383,9 @@ class InsnTreeTransformer(Transformer):
   # reg:  REG_A REG_B ["."] [REG_C] INT ["S"]
   @v_args(inline=True)
   def reg(self, a, b, c, d):
+    return self.reg_tokens(a, b, c)
+
+  def reg_tokens(self, a, b, c):
     regno = self.seenregs[b]
     c = "" if not c else c
     if len(b) == 1:
@@ -404,6 +408,9 @@ class InsnTreeTransformer(Transformer):
   # imm: "#" IMMLETT INT [":" INT]
   @v_args(inline=True)
   def imm(self, immlett, bits, immshift):
+    return self.imm_tokens(immlett)
+
+  def imm_tokens(self, immlett):
     # When an instruction contains more than one immediate operand, the operand
     # symbols are specified in upper and lower case (e.g., #uN and #UN) to indicate
     # where they appear in the instruction encodings.
@@ -614,8 +621,51 @@ def wrap_call(tok):
 
 def process_insn_tokens(tag, regs, imms):
   beh = behdict[tag]
-  tree = insn_parser.parse(beh)
+  try:
+    tree = insn_parser.parse(beh)
+  except LarkError:
+    return fallback_insn_tokens(tag, regs, imms)
   tokens = InsnTreeTransformer(tag, regs, imms).transform(tree)
+  return tokens
+
+
+# Splits a syntax the grammar doesn't know into operands and text.
+fallback_re = re.compile(r'(?P<reg>' + regre.pattern + r')|(?P<imm>' +
+                         immre.pattern + r')|(?P<word>[A-Za-z_]\w*)|' +
+                         r'(?P<assign>(?<![=!<>])[-+*/&|^]?=(?!=))')
+
+
+def fallback_insn_tokens(tag, regs, imms):
+  """Tokenizes the syntax operand by operand: registers and immediates as the
+  grammar does, the first word called as a function (else the first word that
+  isn't a suffix) as the instruction, and the rest as text."""
+  beh = behdict[tag]
+  transformer = InsnTreeTransformer(tag, regs, imms)
+  matches = list(fallback_re.finditer(beh))
+  words = [m for m in matches
+           if m.group('word') and m.group('word') != 'if' and
+           beh[m.start() - 1:m.start()] not in ('.', ':')]
+  called = [m for m in words if beh[m.end():m.end() + 1] == '(']
+  insn = (called or words or [None])[0]
+  tokens = []
+  pos = 0
+  for m in matches:
+    if m.start() > pos:
+      tokens.append(TextToken('"{}"'.format(beh[pos:m.start()])))
+    if m.group('reg'):
+      a, b, c, d = regre.match(m.group('reg')).groups()
+      tokens += transformer.reg_tokens(a, b, c.lstrip('.'))
+    elif m.group('imm'):
+      tokens += transformer.imm_tokens(m.group('imm')[1])
+    elif m is insn:
+      tokens.append(InstructionToken('"{}"'.format(m.group())))
+    elif m.group('assign'):
+      tokens.append(TextToken('" {} "'.format(m.group())))
+    else:
+      tokens.append(TextToken('"{}"'.format(m.group())))
+    pos = m.end()
+  if pos < len(beh):
+    tokens.append(TextToken('"{}"'.format(beh[pos:])))
   return tokens
 
 

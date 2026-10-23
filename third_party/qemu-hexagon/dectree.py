@@ -250,7 +250,7 @@ def print_match_info(f):
 
 
 regre = re.compile(
-    r'((?<!DUP)[MNORCPQXSGVZA])([stuvwxyzdefg]+)([.]?[LlHh]?)(\d+S?)')
+    r'((?<!DUP)[MNORCPQXSGVZALK])([stuvwxyzdefg]+)([.]?[LlHh]?)(\d+S?)')
 immre = re.compile(r'[#]([rRsSuUm])(\d+)(?:[:](\d+))?')
 
 

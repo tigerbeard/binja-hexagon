@@ -3,9 +3,12 @@
 This folder is a modified version of [quic/qemu](https://github.com/quic/qemu) Hexagon target.
 
 The instruction definitions, `imported/` and `attribs_def.h`, come unmodified
-from upstream QEMU's `target/hexagon`. `import_upstream.py` refreshes them from
-a QEMU checkout and records its commit in `UPSTREAM`. `attribs_def.h` is QEMU's
-`attribs_def.h.inc` with the plugin's attributes from `attribs_local_def.h`.
+from the `target/hexagon` of Qualcomm's QEMU, branch `hex-next`, which has
+instructions QEMU does not yet have (V83, V85, HMX and HLX).
+`import_upstream.py` refreshes them from a QEMU checkout and records its commit
+in `UPSTREAM`. `attribs_def.h` is QEMU's `attribs_def.h.inc` with the plugin's
+attributes from `attribs_local_def.h`. `tag_rev_info.c.inc`, the version that
+introduced each instruction, is copied for the tests.
 The generators and decoder are an older snapshot, which this plugin keeps
 because QEMU now decodes with decodetree.
 
@@ -22,6 +25,15 @@ Local changes include:
    as instructions of their own, `TAG_deprecated`, with `TAG`'s semantics and
    `:deprecated` after its syntax, as the PRM writes them
    (`gen_semantics.c`, `gen_dectree_import.c`, `opcodes.c`).
+
+*  HLX, as in QEMU: a 32-bit word that decodes as nothing else is looked up
+   in the HLX encodings (`q6v_decode.c`), and an HLX store's new value
+   (`Ku16.new`) is resolved to its producer's L register (`decode.c`). The
+   register regexes know the L and K register types. The build makes
+   `generated_hlx_ext.idef` from `imported/hlx_ext.idef` with the preprocessor,
+   as QEMU's does.
+
+*  `hex_common.read_attribs_file` reads attribute definitions that span lines.
 
 *  Replaces `assert`s with `longjmp`s, so decoder fails gracefully for invalid, non-code input.
 

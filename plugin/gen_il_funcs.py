@@ -38,8 +38,7 @@ semantics_grammar = r"""
 fbody: stmt* -> fbody
 
 ?stmt: "if" "(" expr ")" stmt [ "else" stmt ] -> if_stmt
-     | expr "?" "(" assg ")" ":" "(" assg ")" -> ternary_stmt
-     | id "=" "(" expr "?" expr ":" expr ")" ";" -> assg_ternary_stmt
+     | logor_e "?" "(" assg ")" ":" "(" assg ")" -> ternary_stmt
      | "while" "(" expr ")" stmt
      | "for" "(" [ assg ] ";" [ expr ] ";" [ assg ] ")" stmt
      | "return" [ expr ] ";"
@@ -52,18 +51,54 @@ fbody: stmt* -> fbody
 
 ?assg: id "=" expr
 
-?expr: "-" expr        -> neg_expr
-     | "!" expr        -> not_expr
-     | "~" expr        -> bit_not_expr
-     | expr BINOP expr -> expr_binop
-     | expr RELOP expr -> expr_relop
-     | expr LOGOP expr
-     | id
-     | id "(" [expr ("," expr)* ] ")" -> call_expr
-     | id "[" expr "]" -> unexpected
-     | "(" expr ")"
-     | INTCON
-     | STRINGCON
+// Expressions, from the loosest binding to the tightest, as in C. Binary
+// operators group left to right.
+?expr: ternary_e
+
+?ternary_e: logor_e
+          | logor_e "?" expr ":" ternary_e -> ternary_expr
+
+?logor_e: logand_e
+        | logor_e LOGOR logand_e -> expr_logop
+
+?logand_e: bitor_e
+         | logand_e LOGAND bitor_e -> expr_logop
+
+?bitor_e: bitxor_e
+        | bitor_e BITOR bitxor_e -> expr_binop
+
+?bitxor_e: bitand_e
+         | bitxor_e BITXOR bitand_e -> expr_binop
+
+?bitand_e: eq_e
+         | bitand_e BITAND eq_e -> expr_binop
+
+?eq_e: rel_e
+     | eq_e EQOP rel_e -> expr_relop
+
+?rel_e: shift_e
+      | rel_e RELOP shift_e -> expr_relop
+
+?shift_e: add_e
+        | shift_e SHIFTOP add_e -> expr_binop
+
+?add_e: mul_e
+      | add_e ADDOP mul_e -> expr_binop
+
+?mul_e: unary_e
+      | mul_e MULOP unary_e -> expr_binop
+
+?unary_e: primary_e
+        | "-" unary_e -> neg_expr
+        | "!" unary_e -> not_expr
+        | "~" unary_e -> bit_not_expr
+
+?primary_e: id
+          | id "(" [expr ("," expr)* ] ")" -> call_expr
+          | id "[" expr "]" -> unexpected
+          | "(" expr ")"
+          | INTCON
+          | STRINGCON
 
 ASSGOP.4: "+="
      |    "-="
@@ -71,25 +106,16 @@ ASSGOP.4: "+="
      |    "^="
      |    "|="
 
-BINOP.3: "+"
-     |   "-"
-     |   "*"
-     |   "/"
-     |   "|"
-     |   "&"
-     |   "^"
-     |   "<<"
-     |   ">>"
-
-RELOP.2: "=="
-     |   "!="
-     |   "<="
-     |   "<"
-     |   ">="
-     |   ">"
-
-LOGOP.1: "&&"
-     |   "||"
+LOGOR.3: "||"
+LOGAND.3: "&&"
+SHIFTOP.3: "<<" | ">>"
+EQOP.3: "==" | "!="
+RELOP.2: "<=" | ">=" | "<" | ">"
+BITOR.1: "|"
+BITXOR.1: "^"
+BITAND.1: "&"
+ADDOP.1: "+" | "-"
+MULOP.1: "*" | "/"
 
 ?id: REG_OLD | REG_NEW | REG_LR | IMM | MACRO | EA | SIGN | BRANCH_TYPE | TMP
 REG_OLD: REG "V"
@@ -122,6 +148,8 @@ STRINGCON: ESCAPED_STRING
 %import common.WS
 %ignore WS
 """
+
+BINOP_TERMINALS = ('BITOR', 'BITXOR', 'BITAND', 'SHIFTOP', 'ADDOP', 'MULOP')
 
 semantics_parser = Lark(
     semantics_grammar,
@@ -804,6 +832,55 @@ class IlCompareUnsignedLessEqual(IlCompareExpr):
   def __repr__(self):
     return '''il.CompareUnsignedLessEqual({0}, {1}, {2})'''.format(
         self.size, self.a, self.b)
+
+
+class IlTernary(IlExprId):
+  """`cond ? t : f`. Binary Ninja has no select, so the assignment that holds
+  it becomes an if/else (SemanticsTreeTransformer.assg)."""
+
+  @type_check
+  def __init__(self, cond: IlExprId, t: IlExprId, f: IlExprId):
+    super().__init__(signed=t.signed)
+    self.cond, self.t, self.f = cond, t, f
+    self.size = max(t.size, f.size)
+
+  def __eq__(self, other):
+    if not isinstance(other, self.__class__):
+      return NotImplemented
+    return (self.cond == other.cond and self.t == other.t and self.f == other.f)
+
+  def __repr__(self):
+    raise ValueError('A ternary outside an assignment is not lifted')
+
+
+def find_ternary(expr):
+  """The first IlTernary in |expr|, or None."""
+  if isinstance(expr, IlTernary):
+    return expr
+  if isinstance(expr, (list, tuple)):
+    children = expr
+  elif isinstance(expr, IlExprId):
+    children = vars(expr).values()
+  else:
+    return None
+  for child in children:
+    found = find_ternary(child)
+    if found is not None:
+      return found
+  return None
+
+
+def replace_expr(expr, old, new):
+  """A copy of |expr| with the node |old| replaced by |new|."""
+  if expr is old:
+    return new
+  if isinstance(expr, list):
+    return [replace_expr(e, old, new) for e in expr]
+  if isinstance(expr, IlExprId):
+    expr = copy.copy(expr)
+    for name, value in list(vars(expr).items()):
+      setattr(expr, name, replace_expr(value, old, new))
+  return expr
 
 
 class IlIf(IlExprId):
@@ -1657,19 +1734,11 @@ class SemanticsTreeTransformer(Transformer):
       ret += [RawC('''}''')]
     return ret
 
-  #   | expr "?" "(" assg ")" ":" "(" assg ")" -> ternary_stmt
+  #   | logor_e "?" "(" assg ")" ":" "(" assg ")" -> ternary_stmt
   @v_args(inline=False)
   def ternary_stmt(self, args):
     assert (len(args) == 3)
     return self.if_stmt(args)
-
-  #   | id "=" "(" expr "?" expr ":" expr ")" ";" -> assg_ternary_stmt
-  @v_args(inline=True)
-  def assg_ternary_stmt(self, lvalue, cond, tvalue, fvalue):
-    # a = (c ? t : f) => if (c) a = t; else a = f;
-    return self.if_stmt(
-        [cond, self.assg(lvalue, tvalue),
-         self.assg(lvalue, fvalue)])
 
   #   | assg ";" -> assg_stmt
   @v_args(inline=True)
@@ -1701,34 +1770,42 @@ class SemanticsTreeTransformer(Transformer):
   # ?assg: id "=" expr
   @v_args(inline=True)
   def assg(self, lvalue, rvalue):
-    lvalue = self.lift_operand(lvalue)
     rvalue = self.lift_operand(rvalue)
+    ternary = find_ternary(rvalue)
+    if ternary is not None:
+      # a = E[c ? t : f] => if (c) a = E[t]; else a = E[f];
+      return self.if_stmt([
+          ternary.cond,
+          self.assg(lvalue, replace_expr(rvalue, ternary, ternary.t)),
+          self.assg(lvalue, replace_expr(rvalue, ternary, ternary.f))
+      ])
+    lvalue = self.lift_operand(lvalue)
     assert (isinstance(lvalue, IlRegister))
     return [IlSetRegister(lvalue.size, lvalue.reg, rvalue)]
 
-  # ?expr: "-" expr        -> neg_expr
+  # ?unary_e: "-" unary_e -> neg_expr
   @v_args(inline=False)
   def neg_expr(self, args):
     assert (len(args) == 1)
     val = self.lift_operand(args[0])
     return IlNeg(val.size, val)
 
-  # | "!" expr        -> not_expr
+  # | "!" unary_e -> not_expr
   def not_expr(self, args):
     assert (len(args) == 1)
     val = self.lift_operand(args[0])
     return IlNot(val.size, val)
 
-  # | "~" expr        -> bit_not_expr
+  # | "~" unary_e -> bit_not_expr
   def bit_not_expr(self, args):
     assert (len(args) == 1)
     val = self.lift_operand(args[0])
     return IlNot(val.size, val)
 
-  # | expr BINOP expr -> expr_binop
+  # The arithmetic, shift and bitwise levels -> expr_binop
   @v_args(inline=True)
   def expr_binop(self, op1, binop, op2):
-    assert (binop.type == 'BINOP')
+    assert (binop.type in BINOP_TERMINALS)
     op1, op2 = list(map(self.lift_operand, [op1, op2]))
 
     if (binop.value == '+'):
@@ -1760,10 +1837,11 @@ class SemanticsTreeTransformer(Transformer):
 
     assert (0)
 
-  # | expr RELOP expr -> expr_relop
+  # | eq_e EQOP rel_e -> expr_relop
+  # | rel_e RELOP shift_e -> expr_relop
   @v_args(inline=True)
   def expr_relop(self, op1, relop, op2):
-    assert (relop.type == 'RELOP')
+    assert (relop.type in ('EQOP', 'RELOP'))
     op1, op2 = list(map(self.lift_operand, [op1, op2]))
 
     if (relop.value == '=='):
@@ -1797,6 +1875,17 @@ class SemanticsTreeTransformer(Transformer):
         return IlCompareUnsignedGreaterThan(op1.size, op1, op2)
 
     assert (0)
+
+  # | logor_e LOGOR logand_e -> expr_logop
+  # | logand_e LOGAND bitor_e -> expr_logop
+  @v_args(inline=True)
+  def expr_logop(self, op1, logop, op2):
+    raise ValueError('Logical operators are not lifted')
+
+  # | logor_e "?" expr ":" ternary_e -> ternary_expr
+  @v_args(inline=True)
+  def ternary_expr(self, cond, t, f):
+    return IlTernary(*map(self.lift_operand, [cond, t, f]))
 
   # | id "[" expr "]" -> unexpected
   @v_args(inline=False)

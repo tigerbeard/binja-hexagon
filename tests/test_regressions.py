@@ -500,6 +500,100 @@ f:
     self.assertEqual(llvm_diff.compare(binja, words), [])
 
 
+class TestQualcommInstructions(SnippetTest):
+  # Instructions from Qualcomm's QEMU (hex-next) that LLVM lacks, as words
+  # built from their encodings: V83 restricted-target branches and trap2, V83
+  # vallocframe and vsfadd, V85 atomics and dcfetch_multi, HMX, and HLX. The
+  # HLX packet stores the value its load produces (Ku16.new names it).
+
+  SOURCE = '''
+f:
+  .word 0x7f80c000
+  .word 0x9002e321
+  .word 0x90c2e6c4
+  .word 0xeb02c440
+  .word 0x9401c880
+  .word 0x9200c1e4
+  .word 0x9202e3ef
+  .word 0x9204c3fe
+  .word 0xa6e5da10
+  .word 0xa6e6c718
+  .word 0xa6e0c013
+  .word 0xe506e082
+  .word 0x98005003
+  .word 0xa485c002
+  .word 0x6080c803
+  .word 0x5022c000
+  .word 0x54c0c014
+  .word 0x521fc000
+'''
+
+  def test_decodes_qualcomm_instructions(self):
+    f = self.analyse(self.SOURCE)['f']
+    self.assertEqual(
+        hexasm.disasm(binja, f), '''
+{ nop_rb }
+{ R1 = atomw_add(R2,R3):aq }
+{ R5:4 = atomd_swap(R2,R7:6):rl }
+{ R1:0 = vsfadd(R3:2,R5:4) }
+{ dcfetch_multi(R1,R2) }
+{ activation.hf = mxmem(R0,R1) }
+{ weight.hf = mxmem(R2,R3) }
+{ bias = mxmem2(R4) }
+{ cvt.hf = acc(R5) }
+{ mxmem(R6,R7) = cvt }
+{ mxclracc.hf }
+{ L1.h = mux(L1.h,L2.h,L3.h) }
+{ L3.tmp = mem(R0)
+mem(R5) = L3.new }
+{ vallocframe(#0x3) }
+{ callr_rb R2 }
+{ trap2(#0x5) }
+{ jumpr_rb LR }''')
+
+  def test_restricted_branches_lift_like_their_older_forms(self):
+    il = hexasm.llil(self.analyse(self.SOURCE)['f'])
+    self.assertIn('temp#6.d = R2\n21: call(temp#6.d)', il)
+    self.assertIn('23: syscall', il)
+    self.assertTrue(il.endswith('<return> jump(LR)'), il)
+
+  def test_new_instructions_lift_as_intrinsics(self):
+    il = hexasm.llil(self.analyse(self.SOURCE)['f'])
+    for call in ('temp#0 = AM_addw_aq(R2, R3)', 'M8_mxmem_blk_sm_act_hf(R0, R1)',
+                 'M8_mxclracc_hf()', 'LX_mux_h()', 'LX_S16b_new(R5)',
+                 'V2_vallocframe_imm(3)'):
+      self.assertIn(call, il)
+
+  def test_hlx_new_value_store_needs_a_producer(self):
+    arch = binja.Architecture['hexagon']
+    self.assertEqual(arch.get_instruction_text(
+        (0xa485c002).to_bytes(4, 'little'), 0), ([], 0))
+
+  def test_every_new_encoding_decodes_as_itself(self):
+    # A word for each encoding LLVM lacks, with random fields, decodes to text
+    # of its own syntax's shape. HLX new-value stores need a producer.
+    def shape(text):
+      text = re.sub(r'\b([RPLK][a-z]*\d+(:\d+)?|SP|FP|LR)\b', 'reg', text)
+      text = re.sub(r'#+-?(0x[0-9a-f]+|\d+|[rRsSuUm]\d+(:\d+)?)', '#imm', text)
+      return re.sub(r'[\s{}]', '', text)
+
+    words = [(tag, w) for tag, w in llvm_diff.pattern_words(
+        r'^(M8|LX)_|_rb$|^(AM|F7|V2)_|^J2_trap2$|^Y4_dcfetch_multi$',
+        llvm_only=False) if not re.search(r'K\w*\.new', iset_syntax(tag))]
+    self.assertGreaterEqual(len(words), 340)
+    texts = llvm_diff.plugin_disasm(binja, [w for _, w in words])
+    wrong = [(tag, hex(w), text) for (tag, w), text in zip(words, texts)
+             if text is None or shape(text) != shape(iset_syntax(tag))]
+    self.assertEqual(wrong, [])
+
+
+def iset_syntax(tag, _iset={}):
+  if not _iset:
+    with open(llvm_diff.DEFAULT_ISET) as f:
+      exec(f.read(), _iset)
+  return _iset['iset'][tag]['syntax']
+
+
 class TestOperatorPrecedence(SnippetTest):
   # #46: the semantics parser grouped binary operators to the right, so
   # add(Rs,sub(#s6,Ru)), whose semantics are Rs - Ru + s6, lifted as

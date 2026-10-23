@@ -23,6 +23,24 @@ from gen_insn_text_funcs import *
 from lark import Tree, Token
 
 SEMANTICS = """SEMANTICS( \
+    "AM_swapd_rl", \
+    "Rdd32=atomd_swap(Rs32,Rtt32):rl", \
+    \"\"\"{ fEA_REG(RsV); }\"\"\" \
+)
+ATTRIBUTES( \
+    "AM_swapd_rl", \
+    "ATTRIBS(A_LOAD,A_STORE)" \
+)
+SEMANTICS( \
+    "LX_shra_w_uw", \
+    "Lxx16.w+=shr(Luu16.uw,Lv16.h)", \
+    \"\"\"{ }\"\"\" \
+)
+ATTRIBUTES( \
+    "LX_shra_w_uw", \
+    "ATTRIBS()" \
+)
+SEMANTICS( \
     "J2_jump", \
     "jump #r22:2", \
     \"\"\"{fIMMEXT(riV); fPCALIGN(riV); fBRANCH(fREAD_PC()+riV,COF_TYPE_JUMP);}\"\"\" \
@@ -325,6 +343,44 @@ class TestGenInsnTextFuncs(unittest.TestCase):
           filter(lambda x: isinstance(x[1], CodeRelativeAddressToken),
                  enumerate(tokens)))
       self.assertEqual(len(addresses), 1)
+
+  def test_unparsed_syntax_is_tokenized_by_operand(self):
+    # The grammar knows neither syntax; the fallback still finds the
+    # instruction and every register.
+    expected = {
+        'AM_swapd_rl': [
+            'RegisterToken(arg1=\'GetRegisterPairName("R", insn.regno[0])\')',
+            'TextToken(arg1=\'" = "\')',
+            'InstructionToken(arg1=\'"atomd_swap"\')',
+            'TextToken(arg1=\'"("\')',
+            'RegisterToken(arg1=\'GetRegisterName("R", "", insn.regno[1])\')',
+            'TextToken(arg1=\'","\')',
+            'RegisterToken(arg1=\'GetRegisterPairName("R", insn.regno[2])\')',
+            'TextToken(arg1=\'"):"\')',
+            'TextToken(arg1=\'"rl"\')',
+        ],
+        'LX_shra_w_uw': [
+            'RegisterToken(arg1=\'GetRegisterPairName("L", insn.regno[0])\')',
+            'TextToken(arg1=\'"."\')',
+            'TextToken(arg1=\'"w"\')',
+            'TextToken(arg1=\'" += "\')',
+            'InstructionToken(arg1=\'"shr"\')',
+            'TextToken(arg1=\'"("\')',
+            'RegisterToken(arg1=\'GetRegisterPairName("L", insn.regno[1])\')',
+            'TextToken(arg1=\'"."\')',
+            'TextToken(arg1=\'"uw"\')',
+            'TextToken(arg1=\'","\')',
+            'RegisterToken(arg1=\'GetRegisterName("L", "", insn.regno[2])\')',
+            'TextToken(arg1=\'"."\')',
+            'TextToken(arg1=\'"h"\')',
+            'TextToken(arg1=\'")"\')',
+        ],
+    }
+    for tag, tokens in expected.items():
+      self.assertEqual(
+          list(map(repr, process_insn_tokens(
+              tag, TestGenInsnTextFuncs.tagregs[tag],
+              TestGenInsnTextFuncs.tagimms[tag]))), tokens)
 
   def test_process_tags(self):
     for tag in [

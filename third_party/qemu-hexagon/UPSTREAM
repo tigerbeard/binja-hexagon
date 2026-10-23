@@ -1,2 +1,2 @@
-imported/ and attribs_def.h are from https://gitlab.com/qemu-project/qemu.git
-at commit 4f4225874d4d3747ec1142e935dbd314218992fa (2026-10-22).
+imported/ and attribs_def.h are from https://github.com/quic/qemu
+at commit bf17ecc1ca9aea49a54457eafe41ed319fdab39d (2026-10-23).

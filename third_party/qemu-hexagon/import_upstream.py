@@ -20,8 +20,10 @@
 
 Replaces imported/ with QEMU's target/hexagon/imported/, unmodified, and
 attribs_def.h with QEMU's attribs_def.h.inc plus the plugin's attributes from
-attribs_local_def.h. Records the QEMU commit in UPSTREAM. The rest of this
-directory is an older, modified snapshot (README.md) and is left alone.
+attribs_local_def.h. Copies QEMU's tag_rev_info.c.inc, the version that
+introduced each instruction, which the tests read. Records the QEMU commit in
+UPSTREAM. The rest of this directory is an older, modified snapshot
+(README.md) and is left alone.
 """
 
 import argparse
@@ -33,6 +35,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 IMPORTED = 'target/hexagon/imported'
 ATTRIBS = 'target/hexagon/attribs_def.h.inc'
+TAG_REV_INFO = 'target/hexagon/tag_rev_info.c.inc'
 LAST_ATTRIB = '/* Keep this as the last attribute: */'
 
 
@@ -67,6 +70,9 @@ def main():
     local = f.read()
   with open(os.path.join(HERE, 'attribs_def.h'), 'w') as f:
     f.write(attribs.replace(LAST_ATTRIB, local + '\n' + LAST_ATTRIB))
+
+  shutil.copyfile(os.path.join(args.qemu, TAG_REV_INFO),
+                  os.path.join(HERE, os.path.basename(TAG_REV_INFO)))
 
   with open(os.path.join(HERE, 'UPSTREAM'), 'w') as f:
     f.write('imported/ and attribs_def.h are from {}\nat commit {} ({}).\n'.format(

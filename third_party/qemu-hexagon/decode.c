@@ -246,11 +246,50 @@ void decode_send_insn_to(Packet *packet, int start, int newloc) {
   }
 }
 
+/*
+ * An HLX store names its new value as Ku16.new, whose field holds the
+ * distance back to the producing HLX instruction, as an Nt field does
+ * (QEMU's decode_fill_newvalue_regno).
+ */
+static void decode_fill_hlx_newvalue_regno(Packet *packet, int i) {
+  uint16_t use_opcode = packet->insn[i].opcode;
+  const char *use = strchr(opcode_reginfo[use_opcode], 'u');
+  ASSERT_AND_ABORT(use != NULL);
+  int use_regidx = use - opcode_reginfo[use_opcode];
+  int offset = packet->insn[i].regno[use_regidx] >> 1;
+  ASSERT_AND_ABORT(offset > 0 && offset <= i);
+  int def_idx = i - offset;
+  for (int j = 0; j < offset; j++) {
+    if (GET_ATTRIB(packet->insn[i - j - 1].opcode, A_IT_EXTENDER)) {
+      def_idx--;
+    }
+  }
+  ASSERT_AND_ABORT(def_idx >= 0 &&
+                   GET_ATTRIB(packet->insn[def_idx].opcode, A_HLX));
+  uint16_t def_opcode = packet->insn[def_idx].opcode;
+  const char *dst = strstr(opcode_wregs[def_opcode], "Ld")
+                        ? strchr(opcode_reginfo[def_opcode], 'd')
+                    : strstr(opcode_wregs[def_opcode], "Lx")
+                        ? strchr(opcode_reginfo[def_opcode], 'x')
+                        : NULL;
+  ASSERT_AND_ABORT(dst != NULL);
+  packet->insn[i].regno[use_regidx] =
+      packet->insn[def_idx].regno[dst - opcode_reginfo[def_opcode]];
+  packet->insn[i].new_value_producer_slot = packet->insn[def_idx].slot;
+}
+
 /* Fill newvalue registers with the correct regno */
 static void decode_fill_newvalue_regno(Packet *packet) {
   int i, use_regidx, def_idx;
   uint16_t def_opcode, use_opcode;
   char *dststr;
+
+  for (i = 0; i < packet->num_insns; i++) {
+    if (GET_ATTRIB(packet->insn[i].opcode, A_DOTNEWVALUE) &&
+        GET_ATTRIB(packet->insn[i].opcode, A_HLX)) {
+      decode_fill_hlx_newvalue_regno(packet, i);
+    }
+  }
 
   for (i = 1; i < packet->num_insns; i++) {
     if (GET_ATTRIB(packet->insn[i].opcode, A_DOTNEWVALUE) &&

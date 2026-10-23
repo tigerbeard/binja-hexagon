@@ -264,6 +264,13 @@ SUPPORTED_TAGS = [
     'S2_pstorerbf_pi_nt', 'S2_pstorerht_pi_nt', 'S2_pstorerhf_pi_nt',
     'S2_pstorerit_pi_nt', 'S2_pstorerif_pi_nt', 'S2_pstorerdt_pi_nt',
     'S2_pstorerdf_pi_nt', 'Y2_dcfetchbo_nt',
+    # V83 restricted-target (_rb) branches, nop and allocframe, with the same
+    # semantics as their older forms, and trap2.
+    'J2_jumpr_rb', 'J2_jumprh_rb', 'J2_jumprt_rb', 'J2_jumprf_rb',
+    'J2_jumprtpt_rb', 'J2_jumprfpt_rb', 'J2_jumprtnew_rb', 'J2_jumprfnew_rb',
+    'J2_jumprtnewpt_rb', 'J2_jumprfnewpt_rb', 'J2_callr_rb', 'J2_callrh_rb',
+    'J2_callrt_rb', 'J2_callrf_rb', 'A2_nop_rb', 'S2_allocframe_rb',
+    'SS2_allocframe_rb', 'J2_trap2',
     # Shifts by a register amount, which shift the other way when the amount
     # is negative, and register-amount bit operations.
     'S2_asl_r_r', 'S2_asl_r_r_acc', 'S2_asl_r_r_nac', 'S2_asl_r_r_and',

@@ -35,19 +35,22 @@ Main features:
 This fork of `google/binja-hexagon` builds against Binary Ninja 6.1 (the
 pinned API revision is in [setup](/docs/setup.md)). The plugin is in alpha.
 
-It decodes the instructions that upstream QEMU's Hexagon target defines,
-which reach V81 for scalar and HVX instructions, and QEMU's legacy
-(`:deprecated`) encodings. The QEMU commit is in
+It decodes the instructions that Qualcomm's QEMU Hexagon target defines (the
+`hex-next` branch of [quic/qemu](https://github.com/quic/qemu), where Hexagon
+work is done before it reaches QEMU): scalar instructions to V85, HVX to V81,
+the HMX matrix extension and the HLX extension, and QEMU's legacy
+(`:deprecated`) encodings. The commit is in
 [`third_party/qemu-hexagon/UPSTREAM`](/third_party/qemu-hexagon/UPSTREAM).
 Hexagon versions only add instructions, so one decoder serves code for any
 version from V5 on.
 
-Each packet is one Binary Ninja instruction. Of the 2,396 instructions:
+Each packet is one Binary Ninja instruction. Of the 2,757 instructions:
 
-*   1,528 are lifted to LLIL with their semantics. That is 87% of the 1,748
-    scalar instructions; no HVX instruction is.
-*   865 are lifted as intrinsics (217 scalar, 648 HVX). Their registers and
-    data flow are right, but the operation is opaque. 137 of them load or
+*   1,546 are lifted to LLIL with their semantics. That is 86% of the 1,788
+    scalar instructions; no HVX, HMX or HLX instruction is.
+*   1,208 are lifted as intrinsics (239 scalar, 648 HVX, 147 HMX, 174 HLX).
+    Their general registers and data flow are right, but the operation is
+    opaque; HVX, HMX and HLX registers are not modelled. 284 of them load or
     store memory.
 *   3 have their own lifts: `hintjumpr` is a no-op, `trap1` a system call and
     `rte` unimplemented.

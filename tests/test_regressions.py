@@ -570,5 +570,31 @@ f:
     self.assertNotIn('jump(', hlil)
 
 
+class TestPredicateAutoAnd(SnippetTest):
+  # #9: several writes to one predicate in a packet are ANDed; the lifter
+  # kept only the last.
+
+  def test_two_compares_are_anded(self):
+    f = self.analyse('''
+f:
+  { p0 = cmp.eq(r0, #0); p0 = cmp.eq(r1, #0) }
+  { r0 = mux(p0, #1, #0) }
+  { jumpr r31 }
+''')['f']
+    self.assertEqual(hexasm.hlil(f), '''
+if (arg1 == 0 & arg2 == 0)
+    return 1
+return 0''')
+
+  def test_new_value_reader_sees_the_and(self):
+    f = self.analyse('''
+f:
+  { p0 = cmp.eq(r0, #0); p0 = cmp.eq(r1, #0); if (p0.new) r2 = #5 }
+  { r0 = r2 }
+  { jumpr r31 }
+''')['f']
+    self.assertIn('bool temp#0 = arg2 == 0 & arg1 == 0', hexasm.hlil(f))
+
+
 if __name__ == '__main__':
   unittest.main()

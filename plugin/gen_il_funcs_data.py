@@ -293,6 +293,10 @@ SUPPORTED_TAGS = [
     'A4_addp_c', 'A4_subp_c', 'S2_tableidxb', 'S2_tableidxh', 'S2_tableidxw',
     'S2_tableidxd', 'A4_boundscheck_hi', 'A4_boundscheck_lo', 'A5_ACS',
     'F2_dfimm_p', 'F2_dfimm_n',
+    # V85 atomics, as a load and a store.
+    'AM_addw_aq', 'AM_addw_rl', 'AM_andw_aq', 'AM_andw_rl', 'AM_orw_aq',
+    'AM_orw_rl', 'AM_xorw_aq', 'AM_xorw_rl', 'AM_swapw_aq', 'AM_swapw_rl',
+    'AM_swapd_aq', 'AM_swapd_rl',
     # Shifts by a register amount, which shift the other way when the amount
     # is negative, and register-amount bit operations.
     'S2_asl_r_r', 'S2_asl_r_r_acc', 'S2_asl_r_r_nac', 'S2_asl_r_r_and',

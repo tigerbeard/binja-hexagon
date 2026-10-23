@@ -551,16 +551,35 @@ mem(R5) = L3.new }
 
   def test_restricted_branches_lift_like_their_older_forms(self):
     il = hexasm.llil(self.analyse(self.SOURCE)['f'])
-    self.assertRegex(il, r'temp#6\.d = R2\n\d+: call\(temp#6\.d\)')
+    self.assertRegex(il, r'temp#(\d+)\.d = R2\n\d+: call\(temp#\1\.d\)')
     self.assertRegex(il, r'\d+: syscall')
     self.assertTrue(il.endswith('<return> jump(LR)'), il)
 
   def test_new_instructions_lift_as_intrinsics(self):
     il = hexasm.llil(self.analyse(self.SOURCE)['f'])
-    for call in ('temp#0 = AM_addw_aq(R2, R3)', 'M8_mxmem_blk_sm_act_hf(R0, R1)',
-                 'M8_mxclracc_hf()', 'LX_mux_h()', 'LX_S16b_new(R5)',
-                 'V2_vallocframe_imm(3)'):
+    for call in ('M8_mxmem_blk_sm_act_hf(R0, R1)', 'M8_mxclracc_hf()',
+                 'LX_mux_h()', 'LX_S16b_new(R5)', 'V2_vallocframe_imm(3)'):
       self.assertIn(call, il)
+
+  def test_atomics_lift_as_a_load_and_a_store(self):
+    # The :aq and :rl ordering is not lifted.
+    f = self.analyse('''
+f:
+  .word 0x9002e321
+  .word 0x90c2e6c4
+  { jumpr r31 }
+''')['f']
+    self.assertIn('''
+0: temp#0.d = R2
+1: temp#1.d = [temp#0.d].d
+2: [temp#0.d].d = temp#1.d + R3
+3: R1 = temp#1.d
+4: temp#2.q = R7:R6
+5: temp#0.d = R2
+6: temp#3.q = [temp#0.d].q
+7: [temp#0.d].q = temp#2.q
+8: R5:R4 = temp#3.q''', hexasm.llil(f))
+    self.assertTrue(hexasm.hlil(f).startswith('\n*arg3 += arg4'))
 
   def test_hlx_new_value_store_needs_a_producer(self):
     arch = binja.Architecture['hexagon']

@@ -21,7 +21,6 @@
 #include <functional>
 #include <map>
 #include <optional>
-#include <set>
 #include <vector>
 
 #include "absl/memory/memory.h"
@@ -180,9 +179,13 @@ public:
   int AddDestWriteOnlyPredReg(int reg);
   int AddDestReadWritePredReg(int reg);
 
+  // Starts lifting instruction |insn_num| of the packet.
+  void BeginInstruction(int insn_num) { insn_num_ = insn_num; }
+
   // Writes |value| to the predicate temp |temp| (from AddDest*PredReg).
-  // Several writes to one predicate in a packet are ANDed together, as the
-  // hardware does.
+  // Writes to one predicate by several instructions of a packet are ANDed
+  // together, as the hardware does. An instruction's own writes, such as one
+  // on each side of an if/else, are not.
   void WritePredicate(int temp, BinaryNinja::ExprId value);
 
   // Adds IL instructions that write back all clobbered registers.
@@ -208,8 +211,10 @@ private:
   BinaryNinja::LowLevelILFunction &il_;
   // Ordered by register, so write-back order is the same on every platform.
   std::map<int, std::unique_ptr<TempReg>> regs_;
-  // Predicate temps written so far in the packet.
-  std::set<int> written_predicates_;
+  // The instruction being lifted, and the first instruction to write each
+  // predicate temp.
+  int insn_num_ = 0;
+  std::map<int, int> predicate_writers_;
   struct BranchCondition {
     std::function<BinaryNinja::ExprId()> build;
     std::vector<int> reads;

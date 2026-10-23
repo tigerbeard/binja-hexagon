@@ -259,6 +259,7 @@ absl::Status FillBnInstructionLowLevelIL(Architecture *arch, uint64_t pc,
     if (PlainLoopEnd(insn, pc)) {
       continue; // Lifted with the packet's branches.
     }
+    ctx->BeginInstruction(i);
     RETURN_IF_ERROR(
         FillBnInstructionLowLevelImpl(arch, pc, pkt, insn, i, *ctx));
   }

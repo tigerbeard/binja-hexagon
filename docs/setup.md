@@ -31,7 +31,6 @@ $ .venv/bin/pip install -r requirements.txt
 
 ```
 $ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     -DPython3_EXECUTABLE=$PWD/.venv/bin/python
 $ cmake --build build
 ```
@@ -41,9 +40,6 @@ The build accepts the following variables, set using `cmake -D`:
 - **BN_INSTALL_DIR**: Binary Ninja installation directory. Defaults to
   `/Applications/Binary Ninja.app` on macOS and `~/binaryninja` elsewhere.
   Used to find the Python API for the tests and the core library at run time.
-
-- **CMAKE_POLICY_VERSION_MINIMUM**: needed with CMake 4, because the pinned
-  googletest declares a CMake version older than 3.5.
 
 - **Python3_EXECUTABLE**: the interpreter from the `venv` above.
 

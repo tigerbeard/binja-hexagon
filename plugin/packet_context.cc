@@ -204,5 +204,9 @@ size_t TempRegSize(uint32_t index) {
   if (index < kBranchTakenBase) {
     return 4;
   }
-  return 1;
+  if (index < kLocalTempBase) {
+    return 1;
+  }
+  // LOCAL1_REG, LOCAL2_REG, LOCAL4_REG and LOCAL8_REG.
+  return size_t{1} << ((index - kLocalTempBase) / kLocalTempsPerSize);
 }

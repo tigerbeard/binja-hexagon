@@ -318,14 +318,14 @@ return S2_cl0(arg2) + 3''')
   def test_pair_output_is_eight_bytes(self):
     f = self.analyse('''
 f:
-  { r1:0 = vsxthw(r2) }
+  { r1:0 = tlbr(r2) }
   { memd(r29+#8) = r1:0 }
   { jumpr r31 }
 ''')['f']
     il = hexasm.llil(f)
-    self.assertIn('0: temp#0 = S2_vsxthw(R2)', il)
+    self.assertIn('0: temp#0 = Y2_tlbr(R2)', il)
     self.assertIn('1: R1:R0 = temp#0.q', il)
-    self.assertIn('int64_t arg_8 = S2_vsxthw(arg3)', hexasm.hlil(f))
+    self.assertIn('int64_t arg_8 = Y2_tlbr(arg3)', hexasm.hlil(f))
 
   def test_load_after_unlifted_store_is_not_folded(self):
     # dczeroa is a memory intrinsic, so the earlier store's value does not

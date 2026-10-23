@@ -192,6 +192,32 @@ Q6INSN(L4_loadw_phys,"Rd32=memw_phys(Rs32,Rt32)", ATTRIBS(A_PRIV,A_RESTRICT_SLOT
 Q6INSN(S4_stored_locked,"memd_locked(Rs32,Pd4)=Rtt32", ATTRIBS(A_STORE,A_RESTRICT_SLOT0ONLY), "Store word with lock",
 { fEA_REG(RsV); fSTORE_LOCKED(1,8,EA,RttV,PdV) })
 
+/* Load-acquire, store-release and release (V71 PRM 80-N2040-51, pp.199, 227,
+ * 264, 277, 280). For lifting, acquire and release order nothing. */
+Q6INSN(L2_loadw_aq,"Rd32=memw_aq(Rs32)", ATTRIBS(A_LOAD,A_RESTRICT_SLOT0ONLY), "Load word with acquire",
+{ fEA_REG(RsV); fLOAD(1,4,u,EA,RdV); })
+
+Q6INSN(L4_loadd_aq,"Rdd32=memd_aq(Rs32)", ATTRIBS(A_LOAD,A_RESTRICT_SLOT0ONLY), "Load double with acquire",
+{ fEA_REG(RsV); fLOAD(1,8,u,EA,RddV); })
+
+Q6INSN(S2_storew_rl_at_vi,"memw_rl(Rs32):at=Rt32", ATTRIBS(A_STORE,A_RESTRICT_SLOT0ONLY), "Store word with release, all threads",
+{ fEA_REG(RsV); fSTORE(1,4,EA,RtV); })
+
+Q6INSN(S2_storew_rl_st_vi,"memw_rl(Rs32):st=Rt32", ATTRIBS(A_STORE,A_RESTRICT_SLOT0ONLY), "Store word with release, single thread",
+{ fEA_REG(RsV); fSTORE(1,4,EA,RtV); })
+
+Q6INSN(S4_stored_rl_at_vi,"memd_rl(Rs32):at=Rtt32", ATTRIBS(A_STORE,A_RESTRICT_SLOT0ONLY), "Store double with release, all threads",
+{ fEA_REG(RsV); fSTORE(1,8,EA,RttV); })
+
+Q6INSN(S4_stored_rl_st_vi,"memd_rl(Rs32):st=Rtt32", ATTRIBS(A_STORE,A_RESTRICT_SLOT0ONLY), "Store double with release, single thread",
+{ fEA_REG(RsV); fSTORE(1,8,EA,RttV); })
+
+Q6INSN(R6_release_at_vi,"release(Rs32):at", ATTRIBS(A_STORE,A_RESTRICT_SLOT0ONLY), "Release earlier stores, all threads",
+{ fEA_REG(RsV); fBARRIER(); })
+
+Q6INSN(R6_release_st_vi,"release(Rs32):st", ATTRIBS(A_STORE,A_RESTRICT_SLOT0ONLY), "Release earlier stores, single thread",
+{ fEA_REG(RsV); fBARRIER(); })
+
 
 
 

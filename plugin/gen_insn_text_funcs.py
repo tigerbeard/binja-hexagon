@@ -96,6 +96,7 @@ insn_grammar = r"""
     chop_hint: ":chop"
     scatter_hint: ":scatter_release"
     nomatch_hint: ":nomatch"
+    order_hint: ":at" | ":st"
     ?res_hint: shift_hint [res_hint]
              | rnd_hint [res_hint]
              | sat_hint [res_hint]
@@ -109,6 +110,7 @@ insn_grammar = r"""
              | chop_hint
              | scatter_hint
              | nomatch_hint
+             | order_hint
 
     insn: WORD
         | WORD "." WORD
@@ -558,6 +560,7 @@ class InsnTreeTransformer(Transformer):
   neg_hint = wrap_text_terminal
   chop_hint = wrap_text_terminal
   scatter_hint = wrap_text_terminal
+  order_hint = wrap_text_terminal
   nomatch_hint = wrap_text_terminal
   cmp_sign = wrap_text_terminal
   not_sign = wrap_text_terminal

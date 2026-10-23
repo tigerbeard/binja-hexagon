@@ -23,5 +23,5 @@ add_test(NAME regression_tests
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 set_tests_properties(regression_tests PROPERTIES
-  ENVIRONMENT "PYTHONPATH=${BN_PYTHON_DIR};HEXAGON_PLUGIN=$<TARGET_FILE:arch_hexagon>"
+  ENVIRONMENT "PYTHONPATH=${BN_PYTHON_DIR};HEXAGON_PLUGIN=$<TARGET_FILE:arch_hexagon>;HEXAGON_ISET=${CMAKE_BINARY_DIR}/third_party/qemu-hexagon/iset.py"
 )

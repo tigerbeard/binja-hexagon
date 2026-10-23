@@ -355,5 +355,61 @@ f:
     self.assertIn('R2 = ', il)
 
 
+class TestAcquireRelease(SnippetTest):
+  # #8: the V67 LL/SC encodings left the bits that V71 uses for load-acquire,
+  # store-release and release as don't-care, so those decoded as LL/SC.
+
+  SOURCE = '''
+f:
+  { r0 = memw_aq(r1) }
+  { r1:0 = memd_aq(r2) }
+  { r0 = memw_locked(r1) }
+  { r1:0 = memd_locked(r2) }
+  { memw_rl(r2):at = r3 }
+  { memw_rl(r2):st = r3 }
+  { memd_rl(r2):at = r5:4 }
+  { memd_rl(r2):st = r5:4 }
+  { release(r2):at }
+  { release(r2):st }
+  { memw_locked(r2, p1) = r3 }
+  { memd_locked(r2, p1) = r5:4 }
+  .word 0xa800c0e3
+  { jumpr r31 }
+'''
+
+  def test_decodes_v71_instructions(self):
+    # 0xa800c0e3 is `R3 = dmsyncht` (V71 PRM p.299); llvm-mc lacks it.
+    f = self.analyse(self.SOURCE)['f']
+    self.assertEqual(
+        hexasm.disasm(binja, f), '''
+{ R0 = memw_aq(R1) }
+{ R1:0 = memd_aq(R2) }
+{ R0 = memw_locked(R1) }
+{ R1:0 = memd_locked(R2) }
+{ memw_rl(R2):at = R3 }
+{ memw_rl(R2):st = R3 }
+{ memd_rl(R2):at = R5:4 }
+{ memd_rl(R2):st = R5:4 }
+{ release(R2):at }
+{ release(R2):st }
+{ memw_locked(R2,P1) = R3 }
+{ memd_locked(R2,P1) = R5:4 }
+{ R3 = dmsyncht }
+{ jumpr LR }''')
+
+  def test_acquire_and_release_lift_as_loads_and_stores(self):
+    il = hexasm.llil(self.analyse(self.SOURCE)['f'])
+    self.assertIn('1: temp#1.d = [temp#0.d].d', il)
+    self.assertIn('13: [temp#0.d].d = R3', il)
+    self.assertIn('22: R6_release_at_vi(R2)', il)
+
+  def test_matches_llvm_for_all_ll_sc_and_acquire_release_encodings(self):
+    import llvm_diff
+    words = [w for tag, w in llvm_diff.pattern_words(
+        r'locked|_aq$|_rl_|^R6_release|L4_loadw_phys|Y5_l2locka')]
+    self.assertGreaterEqual(len(words), 13)
+    self.assertEqual(llvm_diff.compare(binja, words), [])
+
+
 if __name__ == '__main__':
   unittest.main()

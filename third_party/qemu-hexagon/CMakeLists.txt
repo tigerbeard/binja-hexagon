@@ -8,9 +8,12 @@ add_executable(gen_semantics
 
 set(SEMANTICS ${CMAKE_CURRENT_BINARY_DIR}/semantics_generated.pyinc)
 set(SEMANTICS ${SEMANTICS} PARENT_SCOPE)
+# The instruction definitions are compiled into the generator programs, so
+# the outputs depend on the programs: rerun them whenever they are rebuilt.
 add_custom_command(
   OUTPUT ${SEMANTICS}
   COMMAND $<TARGET_FILE:gen_semantics> ${SEMANTICS}
+  DEPENDS gen_semantics
 )
 
 #
@@ -76,6 +79,7 @@ set(DECTREE_IMPORT ${CMAKE_CURRENT_BINARY_DIR}/iset.py)
 add_custom_command(
   OUTPUT ${DECTREE_IMPORT}
   COMMAND $<TARGET_FILE:gen_dectree_import> ${DECTREE_IMPORT}
+  DEPENDS gen_dectree_import
 )
 
 #

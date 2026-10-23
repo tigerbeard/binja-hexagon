@@ -23,7 +23,15 @@ arithmetic right shift). Evaluation stops at the first jump, return or call.
 Intrinsics, unimplemented IL, reads of registers or temps that were never
 written and loads from unmapped memory raise Unsupported, so lifting bugs of
 that kind surface as errors.
+
+Float operations are IEEE single or double precision by their size, rounding
+to nearest even. A conversion of NaN, or of a float outside the integer's
+(signed) range, to an integer raises Undefined: the IL does not say what it
+gives, as C does not.
 """
+
+import math
+import struct
 
 import binaryninja as binja
 
@@ -31,6 +39,10 @@ Op = binja.LowLevelILOperation
 
 
 class Unsupported(Exception):
+  pass
+
+
+class Undefined(Exception):
   pass
 
 
@@ -60,6 +72,67 @@ _BINARY = {
     Op.LLIL_ASR: lambda a, b, s: _signed(a, s) >> min(b, 8 * s),
     Op.LLIL_ROL: lambda a, b, s: _rotate(a, b % (8 * s), s),
     Op.LLIL_ROR: lambda a, b, s: _rotate(a, -b % (8 * s), s),
+}
+
+def _to_float(bits, size):
+  return struct.unpack('<f' if size == 4 else '<d',
+                       _mask(bits, size).to_bytes(size, 'little'))[0]
+
+
+def _from_float(value, size):
+  """The bits of |value| rounded to a float of |size| bytes."""
+  if size == 8:
+    return int.from_bytes(struct.pack('<d', value), 'little')
+  try:
+    return int.from_bytes(struct.pack('<f', value), 'little')
+  except OverflowError:  # Rounds to infinity.
+    return 0x7f800000 | (0x80000000 if value < 0 else 0)
+
+
+def _round_int(n, bits):
+  """|n| rounded to |bits| significant bits, ties to even."""
+  shift = abs(n).bit_length() - bits
+  if shift <= 0:
+    return n
+  q, r = divmod(abs(n), 1 << shift)
+  half = 1 << (shift - 1)
+  if r > half or (r == half and q & 1):
+    q += 1
+  return (q << shift) * (-1 if n < 0 else 1)
+
+
+def _divide(a, b):
+  if b != 0:
+    return a / b
+  if a == 0 or math.isnan(a):
+    return math.nan
+  return math.copysign(math.inf, a) * math.copysign(1, b)
+
+
+def _integral(value, rounding):
+  if math.isinf(value) or math.isnan(value):
+    return value
+  return math.copysign(float(rounding(value)), value)
+
+
+# On Python floats (doubles); a single-precision result is then rounded once,
+# which is exact for these operations.
+_FLOAT_BINARY = {
+    Op.LLIL_FADD: lambda a, b: a + b,
+    Op.LLIL_FSUB: lambda a, b: a - b,
+    Op.LLIL_FMUL: lambda a, b: a * b,
+    Op.LLIL_FDIV: _divide,
+}
+
+_FLOAT_COMPARE = {
+    Op.LLIL_FCMP_E: lambda a, b: a == b,
+    Op.LLIL_FCMP_NE: lambda a, b: a != b,
+    Op.LLIL_FCMP_LT: lambda a, b: a < b,
+    Op.LLIL_FCMP_LE: lambda a, b: a <= b,
+    Op.LLIL_FCMP_GT: lambda a, b: a > b,
+    Op.LLIL_FCMP_GE: lambda a, b: a >= b,
+    Op.LLIL_FCMP_O: lambda a, b: not (math.isnan(a) or math.isnan(b)),
+    Op.LLIL_FCMP_UO: lambda a, b: math.isnan(a) or math.isnan(b),
 }
 
 _COMPARE = {
@@ -138,6 +211,38 @@ class _Machine:
       return int(_COMPARE[op](_mask(self.value(expr.left), operand_size),
                               _mask(self.value(expr.right), operand_size),
                               operand_size))
+    if op in _FLOAT_BINARY:
+      left = _to_float(self.value(expr.left), size)
+      right = _to_float(self.value(expr.right), size)
+      return _from_float(_FLOAT_BINARY[op](left, right), size)
+    if op in _FLOAT_COMPARE:
+      operand_size = expr.left.size
+      return int(_FLOAT_COMPARE[op](
+          _to_float(self.value(expr.left), operand_size),
+          _to_float(self.value(expr.right), operand_size)))
+    if op in (Op.LLIL_FNEG, Op.LLIL_FABS):
+      bits, sign = self.value(expr.src), 1 << (8 * size - 1)
+      return bits ^ sign if op == Op.LLIL_FNEG else bits & ~sign
+    if op == Op.LLIL_FLOAT_CONV:
+      return _from_float(_to_float(self.value(expr.src), expr.src.size), size)
+    if op == Op.LLIL_ROUND_TO_INT:
+      return _from_float(
+          _integral(_to_float(self.value(expr.src), size), round), size)
+    if op == Op.LLIL_FTRUNC:
+      return _from_float(
+          _integral(_to_float(self.value(expr.src), size), math.trunc), size)
+    if op == Op.LLIL_INT_TO_FLOAT:
+      n = _signed(self.value(expr.src), expr.src.size)
+      if size == 4:
+        n = _round_int(n, 24)  # Exactly representable from here on.
+      return _from_float(float(n), size)
+    if op == Op.LLIL_FLOAT_TO_INT:
+      value = _to_float(self.value(expr.src), expr.src.size)
+      bits = 8 * size
+      if math.isnan(value) or math.isinf(value) or not (
+          -(1 << (bits - 1)) <= math.trunc(value) < (1 << (bits - 1))):
+        raise Undefined('{} to a {}-byte integer'.format(value, size))
+      return _mask(math.trunc(value), size)
     if op == Op.LLIL_NEG:
       return _mask(-self.value(expr.src), size)
     if op == Op.LLIL_NOT:

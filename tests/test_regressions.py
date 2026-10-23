@@ -553,8 +553,8 @@ mem(R5) = L3.new }
 
   def test_restricted_branches_lift_like_their_older_forms(self):
     il = hexasm.llil(self.analyse(self.SOURCE)['f'])
-    self.assertIn('temp#6.d = R2\n21: call(temp#6.d)', il)
-    self.assertIn('23: syscall', il)
+    self.assertRegex(il, r'temp#6\.d = R2\n\d+: call\(temp#6\.d\)')
+    self.assertRegex(il, r'\d+: syscall')
     self.assertTrue(il.endswith('<return> jump(LR)'), il)
 
   def test_new_instructions_lift_as_intrinsics(self):
@@ -1153,6 +1153,51 @@ f:
 
 
 @unittest.skipUnless(qemu_oracle.available(), 'needs qemu-system-hexagon')
+class TestFloatingPoint(SnippetTest):
+  # #48: scalar floating point lifts to float IL, which Binary Ninja types as
+  # float and double. Conversions to an integer round to nearest, or toward
+  # zero with :chop, before FloatToInt.
+
+  SOURCE = '''
+f:
+  { r2 = sfmpy(r0, r1) }
+  { r3:2 = convert_sf2df(r2) }
+  { r5:4 = dfadd(r3:2, r3:2) }
+  { p0 = dfcmp.gt(r5:4, r3:2) }
+  { r0 = convert_df2sf(r5:4) }
+  { r1 = convert_sf2uw(r0):chop }
+  { r6 = convert_w2sf(r1) }
+  { if (p0) r0 = add(r6, #0) }
+  { jumpr r31 }
+'''
+
+  def test_lifts_to_float_il(self):
+    il = hexasm.llil(self.analyse(self.SOURCE)['f'])
+    for line in ('0: temp#0.d = R0 f* R1',
+                 '2: temp#1.q = fconvert.d(R2)',
+                 '6: temp#3.q = temp#2.q f+ temp#2.q',
+                 '10: temp#5.b = temp#4.q f> temp#2.q',
+                 '13: temp#6.d = fconvert.s(temp#4.q)',
+                 '15: temp#7.d = (int.q(ftrunc.s(R0))).d',
+                 '17: temp#8.d = float.s(R1)'):
+      self.assertIn(line, il)
+
+  def test_decompiles_with_float_types(self):
+    self.assertEqual(
+        hexasm.hlil(self.analyse(self.SOURCE)['f']), '''
+int32_t R2
+int32_t R3
+R3:R2 = fconvert.d(arg1 * arg2)
+double temp#0 = R3:R2
+int32_t R4
+int32_t R5
+R5:R4 = temp#0 + temp#0
+float result = fconvert.s(R5:R4)
+if (R5:R4 > R3:R2)
+    return float.s((int.q(ftrunc.s(result))).d)
+return result''')
+
+
 class TestQemuCases(SnippetTest):
   # The cases qemu_diff.py runs: only instructions QEMU's CPU has, and no
   # words that write one register twice (undefined; QEMU 11.1 keeps the

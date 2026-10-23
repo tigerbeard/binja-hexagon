@@ -134,7 +134,8 @@ RX_REG_PAIR: "xx" | "yy"
 REG_LR: "REG_LR"
 IMM: IMMLETT "iV"
 IMMLETT: "r" | "R" | "s" | "S" | "u" | "U" | "m"
-MACRO: /f\w+/
+// QEMU's macros, and the C functions its floating-point semantics call.
+MACRO: /f\w+|conv_\w+|isunordered/
 EA: "EA"
 SIGN: "s" | "u"
 BRANCH_TYPE: /COF_TYPE_\w+/
@@ -172,6 +173,9 @@ semantics_parser = Lark(
 
 
 class IlExprId:
+  # Whether the value is a float or double (fFLOAT, fDOUBLE), which makes C
+  # operators lift to float IL.
+  is_float = False
 
   def __init__(self, signed=True):
     self.signed = signed
@@ -841,6 +845,123 @@ class IlCompareUnsignedLessEqual(IlCompareExpr):
         self.size, self.a, self.b)
 
 
+class IlFloatBinop(IlExprId):
+  """A float operation of two operands, il.<CALL>(size, a, b)."""
+  CALL = None
+  RESULT_IS_FLOAT = True
+
+  @type_check
+  def __init__(self, size: int, a: IlExprId, b: IlExprId):
+    super().__init__(signed=True)
+    self.size, self.a, self.b = size, a, b
+    self.is_float = self.RESULT_IS_FLOAT
+
+  def __eq__(self, other):
+    if not isinstance(other, self.__class__):
+      return NotImplemented
+    return (self.size == other.size and self.a == other.a and self.b == other.b)
+
+  def __repr__(self):
+    return 'il.{0}({1}, {2}, {3})'.format(self.CALL, self.size, self.a, self.b)
+
+
+class IlFloatAdd(IlFloatBinop):
+  CALL = 'FloatAdd'
+
+
+class IlFloatSub(IlFloatBinop):
+  CALL = 'FloatSub'
+
+
+class IlFloatMult(IlFloatBinop):
+  CALL = 'FloatMult'
+
+
+class IlFloatDiv(IlFloatBinop):
+  CALL = 'FloatDiv'
+
+
+class IlFloatCompare(IlFloatBinop, IlCompareExpr):
+  # |size| is the operands' size; the result is a boolean.
+  RESULT_IS_FLOAT = False
+
+
+class IlFloatCompareEqual(IlFloatCompare):
+  CALL = 'FloatCompareEqual'
+
+
+class IlFloatCompareNotEqual(IlFloatCompare):
+  CALL = 'FloatCompareNotEqual'
+
+
+class IlFloatCompareLessThan(IlFloatCompare):
+  CALL = 'FloatCompareLessThan'
+
+
+class IlFloatCompareLessEqual(IlFloatCompare):
+  CALL = 'FloatCompareLessEqual'
+
+
+class IlFloatCompareGreaterThan(IlFloatCompare):
+  CALL = 'FloatCompareGreaterThan'
+
+
+class IlFloatCompareGreaterEqual(IlFloatCompare):
+  CALL = 'FloatCompareGreaterEqual'
+
+
+class IlFloatCompareUnordered(IlFloatCompare):
+  CALL = 'FloatCompareUnordered'
+
+
+class IlFloatUnop(IlExprId):
+  """A float operation or conversion of one operand, il.<CALL>(size, a), with
+  a result of |size| bytes."""
+  CALL = None
+  RESULT_IS_FLOAT = True
+
+  @type_check
+  def __init__(self, size: int, a: IlExprId):
+    super().__init__(signed=True)
+    self.size, self.a = size, a
+    self.is_float = self.RESULT_IS_FLOAT
+
+  def __eq__(self, other):
+    if not isinstance(other, self.__class__):
+      return NotImplemented
+    return (self.size == other.size and self.a == other.a)
+
+  def __repr__(self):
+    return 'il.{0}({1}, {2})'.format(self.CALL, self.size, self.a)
+
+
+class IlFloatNeg(IlFloatUnop):
+  CALL = 'FloatNeg'
+
+
+class IlFloatConvert(IlFloatUnop):
+  CALL = 'FloatConvert'
+
+
+class IlIntToFloat(IlFloatUnop):
+  CALL = 'IntToFloat'
+
+
+class IlFloatToInt(IlFloatUnop):
+  CALL = 'FloatToInt'
+  RESULT_IS_FLOAT = False
+
+
+class IlRoundToInt(IlFloatUnop):
+  # Rounds to an integral float in the current (nearest-even) mode.
+  CALL = 'RoundToInt'
+
+
+class IlFloatTrunc(IlFloatUnop):
+  # Rounds toward zero to an integral float.
+  CALL = 'FloatTrunc'
+
+
 class IlTernary(IlExprId):
   """`cond ? t : f`. Binary Ninja has no select, so the assignment that holds
   it becomes an if/else (SemanticsTreeTransformer.assg)."""
@@ -1107,6 +1228,89 @@ class SemanticsTreeTransformer(Transformer):
     if regno == 'REG_LR':
       typ = Token('BRANCH_TYPE', 'COF_TYPE_RETURN')
     return self.macro_stmt_fBRANCH([loc, typ])
+
+  # Floating point. A float or double is a register's bits (fFLOAT, fDOUBLE),
+  # on which C's operators lift to float IL (expr_binop, expr_relop).
+
+  def float_bits(self, args, size, is_float):
+    # fFLOAT(A), fUNFLOAT(A), fDOUBLE(A) and fUNDOUBLE(A) reinterpret A's
+    # bits. fUNFLOAT and fUNDOUBLE also turn any NaN into all ones, which the
+    # IL leaves out.
+    assert (len(args) == 1)
+    val = self.lift_operand(args[0])
+    if isinstance(val, (IlZeroExtend, IlSignExtend)) and val.a.size == size:
+      val = val.a  # A word of a pair (fGETUWORD) as it is.
+    val = convert(val, size, False)
+    val.is_float = is_float
+    return val
+
+  def macro_expr_fFLOAT(self, args):
+    return self.float_bits(args, 4, True)
+
+  def macro_expr_fUNFLOAT(self, args):
+    return self.float_bits(args, 4, False)
+
+  def macro_expr_fDOUBLE(self, args):
+    return self.float_bits(args, 8, True)
+
+  def macro_expr_fUNDOUBLE(self, args):
+    return self.float_bits(args, 8, False)
+
+  def macro_expr_fSFMPY(self, args):
+    # #define fSFMPY(A,B) internal_mpyf(A,B), a rounded A * B.
+    assert (len(args) == 2)
+    return self.expr_binop(args[0], Token('MULOP', '*'), args[1])
+
+  def macro_expr_isunordered(self, args):
+    assert (len(args) == 2)
+    a, b = list(map(self.lift_operand, args))
+    assert (a.is_float and b.is_float and a.size == b.size)
+    return IlFloatCompareUnordered(a.size, a, b)
+
+  def macro_stmt_fFPSETROUND_CHOP(self, args):
+    # Rounds toward zero for the rest of the instruction, which conversion()
+    # reads from the semantics.
+    return []
+
+  CONVERSION_TYPES = {'4s': (4, True), '4u': (4, False), '8s': (8, True),
+                      '8u': (8, False), 'sf': (4, None), 'df': (8, None)}
+
+  def conversion(self, name, args):
+    # conv_<from>_to_<to>(A) between integers (4s, 4u, 8s, 8u) and floats
+    # (sf, df), rounding to nearest, or toward zero after fFPSETROUND_CHOP.
+    # A conversion from or to a 64-bit unsigned integer has no IL: integer
+    # and float conversions are signed.
+    assert (len(args) == 1)
+    m = re.fullmatch(r'conv_(\w\w)_to_(\w\w)', name)
+    (from_size, from_signed), (to_size, to_signed) = (
+        self.CONVERSION_TYPES[m.group(1)], self.CONVERSION_TYPES[m.group(2)])
+    val = self.lift_operand(args[0])
+    if from_signed is None and to_signed is None:
+      assert (val.is_float and val.size == from_size)
+      return IlFloatConvert(to_size, val)
+    if from_signed is None:
+      # Float to integer. A C program converts only values the integer type
+      # holds, for which FloatToInt to the signed 8-byte type is exact.
+      assert (val.is_float and val.size == from_size)
+      if (to_size, to_signed) == (8, False):
+        raise ValueError('No IL for a conversion to a 64-bit unsigned integer')
+      if 'fFPSETROUND_CHOP' in semdict[self.tag]:
+        integral = IlFloatTrunc(from_size, val)
+      else:
+        integral = IlRoundToInt(from_size, val)
+      if to_signed:
+        result = IlFloatToInt(to_size, integral)
+      else:
+        result = IlLowPart(to_size, IlFloatToInt(8, integral))
+      result.signed = to_signed
+      return result
+    # Integer to float.
+    if (from_size, from_signed) == (8, False):
+      raise ValueError('No IL for a conversion from a 64-bit unsigned integer')
+    val = convert(val, from_size, from_signed)
+    if not from_signed:
+      val = IlZeroExtend(8, val)  # Holds every value of the type, signed.
+    return IlIntToFloat(to_size, val)
 
   def macro_stmt_fTRAP(self, args):
     # macros.h:
@@ -1884,6 +2088,8 @@ class SemanticsTreeTransformer(Transformer):
   @v_args(inline=False)
   def call_expr(self, args):
     ident = args[0]
+    if ident.type == 'MACRO' and ident.value.startswith('conv_'):
+      return self.conversion(ident.value, args[1:])
     if ident.type == 'MACRO':
       return getattr(self, 'macro_expr_' + ident.value)(args[1:])
     assert (0)
@@ -2003,7 +2209,10 @@ class SemanticsTreeTransformer(Transformer):
   @v_args(inline=False)
   def neg_expr(self, args):
     assert (len(args) == 1)
-    val = int_promote(self.lift_operand(args[0]))
+    val = self.lift_operand(args[0])
+    if val.is_float:
+      return IlFloatNeg(val.size, val)
+    val = int_promote(val)
     result = IlNeg(val.size, val)
     result.signed = val.signed  # The promoted operand's type, as in C.
     return result
@@ -2029,6 +2238,8 @@ class SemanticsTreeTransformer(Transformer):
   def expr_binop(self, op1, binop, op2):
     assert (binop.type in BINOP_TERMINALS)
     op1, op2 = list(map(self.lift_operand, [op1, op2]))
+    if op1.is_float or op2.is_float:
+      return float_binop(op1, binop.value, op2)
     if binop.value in ('<<', '>>'):
       # A shift has its (promoted) left operand's type.
       op1 = int_promote(op1)
@@ -2081,6 +2292,8 @@ class SemanticsTreeTransformer(Transformer):
   def expr_relop(self, op1, relop, op2):
     assert (relop.type in ('EQOP', 'RELOP'))
     op1, op2 = list(map(self.lift_operand, [op1, op2]))
+    if op1.is_float or op2.is_float:
+      return float_binop(op1, relop.value, op2)
     if op1.size != op2.size or op1.signed != op2.signed:
       # Operands of one type compare the same without promotion.
       op1, op2 = promote(op1, op2, compare=True)
@@ -2140,6 +2353,22 @@ class SemanticsTreeTransformer(Transformer):
   @v_args(inline=False)
   def unexpected(self, args):
     raise ValueError('Unexpected grammar rule in insn semantics')
+
+
+FLOAT_BINOPS = {
+    '+': IlFloatAdd, '-': IlFloatSub, '*': IlFloatMult, '/': IlFloatDiv,
+    '==': IlFloatCompareEqual, '!=': IlFloatCompareNotEqual,
+    '<': IlFloatCompareLessThan, '<=': IlFloatCompareLessEqual,
+    '>': IlFloatCompareGreaterThan, '>=': IlFloatCompareGreaterEqual,
+}
+
+
+def float_binop(op1, op, op2):
+  """The float IL for C's |op| on two floats or two doubles."""
+  if not (op1.is_float and op2.is_float and op1.size == op2.size and
+          op in FLOAT_BINOPS):
+    raise ValueError('Unsupported float operation: {}'.format(op))
+  return FLOAT_BINOPS[op](op1.size, op1, op2)
 
 
 def widen(expr, size):

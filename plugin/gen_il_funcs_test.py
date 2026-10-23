@@ -21,6 +21,7 @@ import io
 from hex_common import *
 from gen_il_funcs import *
 from lark import Token
+from lark.exceptions import VisitError
 
 SEMANTICS = """SEMANTICS( \
     "J2_jump", \
@@ -652,6 +653,60 @@ ATTRIBUTES( \
     "S6_rol_i_p", \
     "ATTRIBS()" \
 )
+SEMANTICS( \
+    "F2_sfadd", \
+    "Rd32=sfadd(Rs32,Rt32)", \
+    \"\"\"{ RdV=fUNFLOAT(fFLOAT(RsV)+fFLOAT(RtV));}\"\"\" \
+)
+ATTRIBUTES( \
+    "F2_sfadd", \
+    "ATTRIBS()" \
+)
+SEMANTICS( \
+    "F2_dfcmpuo", \
+    "Pd4=dfcmp.uo(Rss32,Rtt32)", \
+    \"\"\"{PdV=f8BITSOF(isunordered(fDOUBLE(RssV),fDOUBLE(RttV)));}\"\"\" \
+)
+ATTRIBUTES( \
+    "F2_dfcmpuo", \
+    "ATTRIBS()" \
+)
+SEMANTICS( \
+    "F2_conv_sf2uw_chop", \
+    "Rd32=convert_sf2uw(Rs32):chop", \
+    \"\"\"{ fFPSETROUND_CHOP(); RdV = fCAST4u(conv_sf_to_4u(fFLOAT(RsV))); }\"\"\" \
+)
+ATTRIBUTES( \
+    "F2_conv_sf2uw_chop", \
+    "ATTRIBS()" \
+)
+SEMANTICS( \
+    "F2_conv_df2w", \
+    "Rd32=convert_df2w(Rss32)", \
+    \"\"\"{ RdV = fCAST4s(conv_df_to_4s(fDOUBLE(RssV))); }\"\"\" \
+)
+ATTRIBUTES( \
+    "F2_conv_df2w", \
+    "ATTRIBS()" \
+)
+SEMANTICS( \
+    "F2_conv_uw2sf", \
+    "Rd32=convert_uw2sf(Rs32)", \
+    \"\"\"{ RdV = fUNFLOAT(conv_4u_to_sf(fCAST4u(RsV))); }\"\"\" \
+)
+ATTRIBUTES( \
+    "F2_conv_uw2sf", \
+    "ATTRIBS()" \
+)
+SEMANTICS( \
+    "F2_conv_ud2sf", \
+    "Rd32=convert_ud2sf(Rss32)", \
+    \"\"\"{ RdV = fUNFLOAT(conv_8u_to_sf(fCAST8u(RssV))); }\"\"\" \
+)
+ATTRIBUTES( \
+    "F2_conv_ud2sf", \
+    "ATTRIBS()" \
+)
 """
 
 ATTRIBS_DEF = """
@@ -683,6 +738,46 @@ class TestGenIlFunc(unittest.TestCase):
       ]
     self.assertEqual(len(parts), 1)
     return process_semantics(tag, parts[0])
+
+  def test_float_add(self):
+    self.assertEqual(
+        self.parse_semantics('F2_sfadd'), [
+            IlSetRegister(4, 'RdV', IlFloatAdd(4, IlRegister(4, 'RsV'),
+                                               IlRegister(4, 'RtV')))
+        ])
+
+  def test_double_unordered_compare(self):
+    self.assertEqual(
+        self.parse_semantics('F2_dfcmpuo'), [
+            IlSetRegister(1, 'PdV', IlFloatCompareUnordered(
+                8, IlRegister(8, 'RssV'), IlRegister(8, 'RttV')))
+        ])
+
+  def test_float_to_unsigned_rounds_toward_zero_after_chop(self):
+    self.assertEqual(
+        self.parse_semantics('F2_conv_sf2uw_chop'), [
+            IlSetRegister(4, 'RdV', IlLowPart(4, IlFloatToInt(
+                8, IlFloatTrunc(4, IlRegister(4, 'RsV')))))
+        ])
+
+  def test_double_to_int_rounds_to_nearest(self):
+    self.assertEqual(
+        self.parse_semantics('F2_conv_df2w'), [
+            IlSetRegister(4, 'RdV', IlFloatToInt(
+                4, IlRoundToInt(8, IlRegister(8, 'RssV'))))
+        ])
+
+  def test_unsigned_to_float_converts_from_64_bits(self):
+    self.assertEqual(
+        self.parse_semantics('F2_conv_uw2sf'), [
+            IlSetRegister(4, 'RdV', IlIntToFloat(
+                4, IlZeroExtend(8, IlRegister(4, 'RsV'))))
+        ])
+
+  def test_no_il_for_64_bit_unsigned_conversions(self):
+    with self.assertRaises(VisitError) as raised:
+      self.parse_semantics('F2_conv_ud2sf')
+    self.assertIsInstance(raised.exception.orig_exc, ValueError)
 
   def test_tfrsi(self):
     self.assertEqual(

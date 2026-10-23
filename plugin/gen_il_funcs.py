@@ -1803,6 +1803,16 @@ def is_pair_operand(op):
 
 def genptr_decl(tag, regtype, regid, regno):
   mapped_regno = 'MapRegNum(\'{0}\', insn.regno[{1}])'.format(regtype, regno)
+  # A predicated instruction that is cancelled leaves its destination
+  # unchanged. Its destination temps start with the register's old value, so
+  # writing them back at the end of the packet restores it.
+  predicated = 'A_CONDEXEC' in attribdict[tag]
+  if regid in {'dd', 'ee'}:
+    dest = 'AddDestReadWriteRegPair' if predicated else 'AddDestWriteOnlyRegPair'
+  elif regtype == 'P':
+    dest = 'AddDestReadWritePredReg' if predicated else 'AddDestWriteOnlyPredReg'
+  else:
+    dest = 'AddDestReadWriteReg' if predicated else 'AddDestWriteOnlyReg'
   if (regtype == 'R'):
     # GPT register
     if (regid in {'ss', 'tt'}):
@@ -1814,17 +1824,17 @@ def genptr_decl(tag, regtype, regid, regno):
       ]
 
     if (regid in {'dd', 'ee'}):
-      # Destination register pair (write-only).
+      # Destination register pair (write-only unless predicated).
       return [
-          RawC('''const int {0}{1}V = ctx.AddDestWriteOnlyRegPair({2});'''
-               .format(regtype, regid, mapped_regno))
+          RawC('''const int {0}{1}V = ctx.{3}({2});'''
+               .format(regtype, regid, mapped_regno, dest))
       ]
 
     if (regid in {'xx', 'yy'}):
       # Destination register pair (read-write).
       return [
           RawC('''const int {0}{1}V = ctx.AddDestReadWriteRegPair({2});'''
-               .format(regtype, regid, mapped_regno))
+               .format(regtype, regid, mapped_regno, dest))
       ]
 
     if (regid in {'s', 't', 'u', 'v'}):
@@ -1835,10 +1845,10 @@ def genptr_decl(tag, regtype, regid, regno):
       ]
 
     if (regid in {'d', 'e'}):
-      # Destination register (write-only).
+      # Destination register (write-only unless predicated).
       return [
-          RawC('''const int {0}{1}V = ctx.AddDestWriteOnlyReg({2});'''.format(
-              regtype, regid, mapped_regno))
+          RawC('''const int {0}{1}V = ctx.{3}({2});'''.format(
+              regtype, regid, mapped_regno, dest))
       ]
 
     if (regid in {'x', 'y'}):
@@ -1857,17 +1867,17 @@ def genptr_decl(tag, regtype, regid, regno):
       ]
 
     if (regid in {'d', 'e'}):
-      # Destination register (write-only).
+      # Destination register (write-only unless predicated).
       return [
-          RawC('''const int {0}{1}V = ctx.AddDestWriteOnlyPredReg({2});'''
-               .format(regtype, regid, mapped_regno))
+          RawC('''const int {0}{1}V = ctx.{3}({2});'''
+               .format(regtype, regid, mapped_regno, dest))
       ]
 
     if (regid in {'x'}):
       # Destination register (read-write).
       return [
           RawC('''const int {0}{1}V = ctx.AddDestReadWritePredReg({2});'''
-               .format(regtype, regid, mapped_regno))
+               .format(regtype, regid, mapped_regno, dest))
       ]
 
   if (regtype == 'C'):
@@ -1881,10 +1891,10 @@ def genptr_decl(tag, regtype, regid, regno):
       ]
 
     if (regid in {'dd'}):
-      # Destination register pair (write-only).
+      # Destination register pair (write-only unless predicated).
       return [
-          RawC('''const int {0}{1}V = ctx.AddDestWriteOnlyRegPair({2});'''
-               .format(regtype, regid, mapped_regno))
+          RawC('''const int {0}{1}V = ctx.{3}({2});'''
+               .format(regtype, regid, mapped_regno, dest))
       ]
 
     if (regid in {'s'}):
@@ -1895,10 +1905,10 @@ def genptr_decl(tag, regtype, regid, regno):
       ]
 
     if (regid in {'d'}):
-      # Destination register (write-only).
+      # Destination register (write-only unless predicated).
       return [
-          RawC('''const int {0}{1}V = ctx.AddDestWriteOnlyReg({2});'''.format(
-              regtype, regid, mapped_regno))
+          RawC('''const int {0}{1}V = ctx.{3}({2});'''.format(
+              regtype, regid, mapped_regno, dest))
       ]
 
   assert (0)

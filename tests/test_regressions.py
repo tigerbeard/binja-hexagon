@@ -221,5 +221,60 @@ f:
     self.assertNotEqual(single, pair)
 
 
+class TestPredicatedWrites(SnippetTest):
+  # #20: a cancelled predicated instruction must leave its destination
+  # unchanged; the destination used to be written back from an uninitialised
+  # temp.
+
+  def test_conditional_move(self):
+    f = self.analyse('''
+f:
+  { p0 = cmp.eq(r0, #0) }
+  { if (p0) r0 = #5 }
+  { jumpr r31 }
+''')['f']
+    self.assertEqual(hexasm.hlil(f), '''
+if (arg1 == 0)
+    return 5
+return arg1''')
+
+  def test_conditional_add(self):
+    f = self.analyse('''
+f:
+  { p0 = cmp.gt(r1, #3) }
+  { if (!p0) r0 = add(r0, #1) }
+  { jumpr r31 }
+''')['f']
+    self.assertEqual(hexasm.hlil(f), '''
+if (arg2 s<= 3)
+    return arg1 + 1
+return arg1''')
+
+  def test_conditional_load(self):
+    f = self.analyse('''
+f:
+  { p0 = cmp.eq(r1, #0) }
+  { if (!p0) r0 = memw(r1+#4) }
+  { jumpr r31 }
+''')['f']
+    self.assertEqual(hexasm.hlil(f), '''
+if (arg2 != 0)
+    return *(arg2 + 4)
+return arg1''')
+
+  def test_conditional_pair_write_starts_from_old_value(self):
+    f = self.analyse('''
+f:
+  { p0 = cmp.eq(r4, #0) }
+  { if (p0) r1:0 = combine(r2, r3) }
+  { jumpr r31 }
+''')['f']
+    il = hexasm.llil(f)
+    copy_in = re.search(r'(temp#\d+)\.q = R1:R0', il)
+    self.assertIsNotNone(copy_in)
+    self.assertLess(il.index(copy_in.group(0)), il.index('if (P0)'))
+    self.assertIn('R1:R0 = {}.q'.format(copy_in.group(1)), il)
+
+
 if __name__ == '__main__':
   unittest.main()

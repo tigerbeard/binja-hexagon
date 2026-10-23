@@ -70,24 +70,24 @@ g_res = b + a''')
     self.assertEqual(
         self.list_hlil(func), '''
 bool temp90 = b s> a
-uint32_t temp1
+int b_1 = b
 if (temp90)
-    temp1 = 0x8765
+    b_1 = 0x8765
 if (not.b(temp90))
-    temp1 = 0x1234
-g_res = temp1''')
+    b_1 = 0x1234
+g_res = b_1''')
 
   def test_cmp_unsigned_int(self):
     func = self.get_function('test_cmp_unsigned_int')
     self.assertEqual(
         self.list_hlil(func), '''
 bool temp90 = b u> a
-uint32_t temp1
+unsigned int b_1 = b
 if (temp90)
-    temp1 = 0x8765
+    b_1 = 0x8765
 if (not.b(temp90))
-    temp1 = 0x1234
-g_res = temp1''')
+    b_1 = 0x1234
+g_res = b_1''')
 
   def test_mul_int(self):
     func = self.get_function('test_mul_int')

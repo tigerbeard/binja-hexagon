@@ -892,15 +892,16 @@ if (P0.new) R1 = #0x3 }
 2: temp1.d = 5
 3: R1 = temp1.d
 4: temp90.b = R0.b
-5: if (temp90.b & 1) then 6 else 8
-6: temp1.d = 3
-7: goto 8
-8: R1 = temp1.d
-9: P0 = temp90.b
-10: temp0.d = R1
-11: R0 = temp0.d
-12: temp200.d = LR
-13: <return> jump(LR)''')
+5: temp1.d = R1
+6: if (temp90.b & 1) then 7 else 9
+7: temp1.d = 3
+8: goto 9
+9: R1 = temp1.d
+10: P0 = temp90.b
+11: temp0.d = R1
+12: R0 = temp0.d
+13: temp200.d = LR
+14: <return> jump(LR)''')
     self.assertEqual(
         self.list_hlil(func), '''
 int32_t P3:0
